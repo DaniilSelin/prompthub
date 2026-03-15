@@ -4,35 +4,35 @@ from facade.storage import Storage
 storage = Storage("/tmp/mydb.sqlite")
 
 results = (
-    storage.search("prompts", text="important")
-    .filter(
-        (FieldEquals("author", "daniel") & FieldGreater("version", 2))
-        | FieldLike("content", "%agent%")
-        & ~FieldEquals("status", "archived")
+    storage.execute(storage.make_search_query(text="important")
+        .filter(
+            (FieldEquals("author", "daniel") & FieldGreater("version", 2))
+            | FieldLike("content", "%agent%")
+            & ~FieldEquals("status", "archived")
+        )
+        .order_by("version")
+        .limit(5)
     )
-    .order_by("version")
-    .limit(5)
-    .offset(10)
-    .execute()
 )
 
-storage.update("prompts", {"status": "reviewed"}) \
+storage.execute(storage.make_update_query({"status": "reviewed"}) \
     .filter(
         (FieldEquals("author", "daniel") | FieldEquals("status", "active"))
         & ~FieldLike("content", "%deprecated%")
-    ) \
-    .execute()
+    )
+)
 
-storage.insert("prompts", {
-    "author": "daniel",
-    "content": "Очень важный промпт",
-    "version": 3,
-    "status": "active"
-}).execute()
+storage.execute(storage.make_insert_query({
+        "author": "daniel",
+        "content": "Очень важный промпт",
+        "version": 3,
+        "status": "active"
+    })
+)
 
-storage.delete("prompts") \
+storage.execute(storage.make_delete_query() \
     .filter(
         (FieldEquals("status", "deprecated") | FieldGreater("version", 5))
         & ~FieldEquals("author", "admin")
-    ) \
-    .execute()
+    )
+)

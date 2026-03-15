@@ -1,0 +1,166 @@
+from typing import Any
+from abc import abstractmethod
+
+from search.filters import Filter, FieldEquals, FieldGreater, FieldLike
+
+class BaseQuery:
+    def __init__(self, table: str):
+        self.table = table
+        self.filters: Filter | None = None
+        self._order_by: str | None = None
+        self._limit: int | None = None
+        self._offset: int | None = None
+        self.params: list[Any] = []
+
+    def filter(self, filter_obj: Filter):
+        self.filters = filter_obj
+        return self
+
+    def order_by(self, field: str):
+        self._order_by = field
+        return self
+
+    def limit(self, n: int):
+        self._limit = n
+        return self
+
+    def offset(self, n: int):
+        self._offset = n
+        return self
+    
+    def compile(self, condition) -> str:
+        if condition is None:
+            return "1=1"
+
+        if isinstance(condition, FieldEquals):
+            self.params.append(condition.value)
+            return f"{condition.field} = ?"
+
+        if isinstance(condition, FieldGreater):
+            self.params.append(condition.value)
+            return f"{condition.field} > ?"
+
+        if isinstance(condition, FieldLike):
+            self.params.append(condition.pattern)
+            return f"{condition.field} LIKE ?"
+
+        if isinstance(condition, Filter):
+            return self.compile_filter(condition)
+
+        raise ValueError("Unknown condition type")
+    
+    def compile_group(self, conditions: list, joiner: str) -> str:
+        if not conditions:
+            return ""
+
+        parts = []
+        for cond in conditions:
+            sql = self.compile(cond)
+            parts.append(f"({sql})")
+
+        return f" {joiner} ".join(parts)
+
+    def compile_filter(self, filter_obj: Filter) -> str:
+        if not filter_obj:
+            return "1=1"
+
+        parts = []
+
+        if filter_obj.must:
+            parts.append(self.compile_group(filter_obj.must, "AND"))
+
+        if filter_obj.should:
+            sql = self.compile_group(filter_obj.should, "OR")
+            parts.append(f"({sql})")
+
+        if filter_obj.must_not:
+            sql = self.compile_group(filter_obj.must_not, "AND")
+            parts.append(f"NOT ({sql})")
+
+        return " AND ".join(p for p in parts if p)
+
+    @abstractmethod
+    def build(self):
+        pass
+
+class SearchQuery(BaseQuery):
+    def __init__(self, table: str, text: str | None = None):
+        super().__init__(table)
+        self.text = text
+
+    def build(self) -> tuple[str, list[Any]]:
+        where_parts: list[str] = []
+
+        text = self.text
+        if text:
+            where_parts.append("content LIKE ?")
+            self.params.append(f"%{text}%")
+
+        if self.filters:
+            where_parts.append(self.compile(self.filters))
+
+        where_sql = " AND ".join(where_parts) if where_parts else "1=1"
+
+        sql = f"SELECT * FROM {self.table} WHERE {where_sql}"
+        if self._order_by:
+            sql += f" ORDER BY {self._order_by}"
+
+        if self._limit == None:
+            sql += " LIMIT ?"
+            self.params.append(self._limit)
+        if self._offset == None:
+            sql += " OFFSET ?"    
+            self.params.append(self._offset)
+
+        return sql, self.params.copy()
+
+class UpdateQuery(BaseQuery):
+    def __init__(self, table: str, values: dict):
+        super().__init__(table)
+        self.values = values
+
+    def build(self):
+        if not self.values:
+            raise ValueError("UpdateQuery.values is empty")
+
+        set_parts = []
+
+        for field, value in self.values.items():
+            set_parts.append(f"{field} = ?")
+            self.params.append(value)
+
+        where_sql = self.compile(self.filters) if self.filters else "1=1"
+
+        sql = f"UPDATE {self.table} SET {', '.join(set_parts)} WHERE {where_sql}"
+
+        return sql, self.params.copy()
+
+class DeleteQuery(BaseQuery):
+    def __init__(self, table: str):
+        super().__init__(table)
+
+    
+    def build(self):
+        where_sql = self.compile(self.filters) if self.filters else "1=1"
+
+        sql = f"DELETE FROM {self.table} WHERE {where_sql}"
+
+        return sql, self.params.copy()
+
+class InsertQuery(BaseQuery):
+    def __init__(self, table: str, values: dict):
+        super().__init__(table)
+        self.values = values
+    
+    def build(self):
+        if not self.values:
+            raise ValueError("InsertQuery.values is empty")
+
+        fields = ", ".join(self.values.keys())
+        placeholders = ", ".join(["?"] * len(self.values))
+
+        sql = f"INSERT INTO {self.table} ({fields}) VALUES ({placeholders})"
+
+        params = list(self.values.values())
+
+        return sql, params

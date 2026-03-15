@@ -1,26 +1,25 @@
 from .tag import PromptTag, ModelTag
+from repository.queries import BaseQuery
+from repository.query_factory import QueryFactory
 
 class PromptVersion:
     def __init__(self, version: str):
         self.version: str = version
 
-class Prompt:
+class Prompt(QueryFactory):
+    tabel: str  = "prompt_versions"
+
     def __init__(self, id: str, tags: list[PromptTag] | None = None):
         self.id: str = id
         self.versions: list[PromptVersion] = []
         self.tags: list[PromptTag] = tags or []
 
-    def search_versions(self) -> list[PromptVersion]:
-        raise NotImplementedError("не реализовано")
+    def execute(self, query: BaseQuery):
+        sql, params = query.build()
 
-    def update_versions(self) -> None:
-        raise NotImplementedError("не реализовано")
-
-    def add_version(self) -> PromptVersion:
-        raise NotImplementedError("не реализовано")
-
-    def remove_version(self) -> None:
-        raise NotImplementedError("не реализовано")
+        print(sql)
+        print(params)
+        return []
 
     def add_tag_prompt(self, tag: PromptTag):
         raise NotImplementedError("не реализовано")
@@ -39,4 +38,3 @@ class Prompt:
     
     def version_history(self):
         raise NotImplementedError("не реализовано")
-
