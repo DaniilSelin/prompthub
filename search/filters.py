@@ -20,7 +20,6 @@ class Condition(ABC):
     def __repr__(self) -> str:
         return self.__class__.__name__
 
-
 class FieldEquals(Condition):
     def __init__(self, field: str, value: Any):
         self.field = field
@@ -47,54 +46,70 @@ class FieldLike(Condition):
     def __repr__(self) -> str:
         return f"Like({self.field!s} LIKE {self.pattern!r})"
 
-"""
-Примечание, которое надо когда нибудь удалить - 
-Сюда я добавил перегрузку операторов для того, чтобы интерпретатор не создавал вложенные условия
-То есть, перегружегнного Condition может хватить для F1 & F2, он создаст условно F3 = (must {F1, F2})
-Но для F1&F2&F3 он будет создавать F4 (must {F5 must {F1, F2}, F3}), то есть будет создавать лишние обёртки.
+class FieldIn(Condition):
+    def __init__(self, field: str, values: list):
+        self.field = field
+        self.values = list(values)
 
-Я не уверен, что сделал это правильно, надо проверить допустимо ли такое сплющивание, не приводит ли оно к ошибкам.
+    def __repr__(self):
+        return f"In({self.field} IN {self.values})"
+
+class FieldBetween(Condition):
+    def __init__(self, field: str, low, high):
+        self.field = field
+        self.low = low
+        self.high = high
+
+    def __repr__(self):
+        return f"Between({self.field} BETWEEN {self.low} AND {self.high})"
+
+class FieldIsNull(Condition):
+    def __init__(self, field: str):
+        self.field = field
+
+    def __repr__(self):
+        return f"IsNull({self.field} IS NULL)"
+
+class FieldNotNull(Condition):
+    def __init__(self, field: str):
+        self.field = field
+
+    def __repr__(self):
+        return f"NotNull({self.field} IS NOT NULL)"
+
+class RawCondition(Condition):
+    def __init__(self, sql: str, params: list | None = None):
+        self.sql = sql
+        self.params = params or []
+
+    def __repr__(self):
+        return f"Raw({self.sql})"
+
+"""
+Сплющивание всё таки приводило к серьёзным ошибкам. Вернул логику вложенных фильтров.
 """
 class Filter(Condition):
-    def __init__(
-        self,
-        must: list[Condition] | None = None,
-        should: list[Condition] | None = None,
-        must_not: list[Condition] | None = None
-    ):
-        self.must: list[Condition] = must or []
-        self.should: list[Condition] = should or []
-        self.must_not: list[Condition] = must_not or []
+    def __init__(self, must=None, should=None, must_not=None):
+        self.must = must or []
+        self.should = should or []
+        self.must_not = must_not or []
 
-    def __and__(self, other: Condition) -> "Filter":
+    def __and__(self, other):
         if isinstance(other, Filter):
-            return Filter(must=self.must + other.must, should=self.should + other.should, must_not=self.must_not + other.must_not)
-        return Filter(must=self.must + [other], should=self.should, must_not=self.must_not)
+            return Filter(must=[self, other])
+        return Filter(must=[self, other])
 
-    def __rand__(self, other: Condition) -> "Filter":
+    def __or__(self, other):
         if isinstance(other, Filter):
-            return Filter(must=other.must + self.must, should=other.should + self.should, must_not=other.must_not + self.must_not)
-        return Filter(must=[other] + self.must, should=self.should, must_not=self.must_not)
+            return Filter(should=[self, other])
+        return Filter(should=[self, other])
 
-    def __or__(self, other: Condition) -> "Filter":
-        if isinstance(other, Filter):
-            return Filter(must=self.must + other.must, should=self.should + other.should, must_not=self.must_not + other.must_not)
-        return Filter(must=self.must, should=self.should + [other], must_not=self.must_not)
+    def __invert__(self):
+        return Filter(must_not=[self])
 
-    def __ror__(self, other: Condition) -> "Filter":
-        if isinstance(other, Filter):
-            return Filter(must=other.must + self.must, should=other.should + self.should, must_not=other.must_not + self.must_not)
-        return Filter(must=self.must, should=[other] + self.should, must_not=self.must_not)
-
-    def __invert__(self) -> "Filter":
-        return Filter(must=self.must, should=self.should, must_not=self.must_not + [self])
-
-    def __repr__(self) -> str:
+    def __repr__(self):
         parts = []
-        if self.must:
-            parts.append("AND[" + ", ".join(repr(p) for p in self.must) + "]")
-        if self.should:
-            parts.append("OR[" + ", ".join(repr(p) for p in self.should) + "]")
-        if self.must_not:
-            parts.append("NOT[" + ", ".join(repr(p) for p in self.must_not) + "]")
+        if self.must: parts.append("AND[" + ", ".join(repr(p) for p in self.must) + "]")
+        if self.should: parts.append("OR[" + ", ".join(repr(p) for p in self.should) + "]")
+        if self.must_not: parts.append("NOT[" + ", ".join(repr(p) for p in self.must_not) + "]")
         return "Filter(" + " ".join(parts) + ")"

@@ -1,7 +1,7 @@
 from typing import Any
 from abc import abstractmethod
 
-from search.filters import Filter, FieldEquals, FieldGreater, FieldLike
+from search.filters import Filter, FieldEquals, FieldGreater, FieldLike, FieldIn, RawCondition, FieldBetween, FieldNotNull, FieldIsNull
 
 class BaseQuery:
     def __init__(self, table: str):
@@ -44,10 +44,31 @@ class BaseQuery:
             self.params.append(condition.pattern)
             return f"{condition.field} LIKE ?"
 
+        if isinstance(condition, FieldIn):
+            if not condition.values:
+                return "0=1"
+            placeholders = ", ".join("?" for _ in condition.values)
+            self.params.extend(condition.values)
+            return f"{condition.field} IN ({placeholders})"
+
+        if isinstance(condition, FieldBetween):
+            self.params.extend([condition.low, condition.high])
+            return f"{condition.field} BETWEEN ? AND ?"
+
+        if isinstance(condition, FieldIsNull):
+            return f"{condition.field} IS NULL"
+
+        if isinstance(condition, FieldNotNull):
+            return f"{condition.field} IS NOT NULL"
+
+        if isinstance(condition, RawCondition):
+            self.params.extend(condition.params)
+            return f"({condition.sql})"
+
         if isinstance(condition, Filter):
             return self.compile_filter(condition)
 
-        raise ValueError("Unknown condition type")
+        raise ValueError("Unknown condition type: %r" % (type(condition),))
     
     def compile_group(self, conditions: list, joiner: str) -> str:
         if not conditions:
@@ -57,11 +78,10 @@ class BaseQuery:
         for cond in conditions:
             sql = self.compile(cond)
             parts.append(f"({sql})")
-
         return f" {joiner} ".join(parts)
 
     def compile_filter(self, filter_obj: Filter) -> str:
-        if not filter_obj:
+        if not filter_obj or (not filter_obj.must and not filter_obj.should and not filter_obj.must_not):
             return "1=1"
 
         parts = []
@@ -70,12 +90,10 @@ class BaseQuery:
             parts.append(self.compile_group(filter_obj.must, "AND"))
 
         if filter_obj.should:
-            sql = self.compile_group(filter_obj.should, "OR")
-            parts.append(f"({sql})")
+            parts.append("(" + self.compile_group(filter_obj.should, "OR") + ")")
 
         if filter_obj.must_not:
-            sql = self.compile_group(filter_obj.must_not, "AND")
-            parts.append(f"NOT ({sql})")
+            parts.append("NOT (" + self.compile_group(filter_obj.must_not, "AND") + ")")
 
         return " AND ".join(p for p in parts if p)
 
@@ -89,6 +107,7 @@ class SearchQuery(BaseQuery):
         self.text = text
 
     def build(self) -> tuple[str, list[Any]]:
+        self.params.clear() 
         where_parts: list[str] = []
 
         text = self.text
@@ -105,10 +124,10 @@ class SearchQuery(BaseQuery):
         if self._order_by:
             sql += f" ORDER BY {self._order_by}"
 
-        if self._limit == None:
+        if self._limit != None:
             sql += " LIMIT ?"
             self.params.append(self._limit)
-        if self._offset == None:
+        if self._offset != None:
             sql += " OFFSET ?"    
             self.params.append(self._offset)
 
@@ -120,6 +139,7 @@ class UpdateQuery(BaseQuery):
         self.values = values
 
     def build(self):
+        self.params.clear()
         if not self.values:
             raise ValueError("UpdateQuery.values is empty")
 
@@ -139,8 +159,8 @@ class DeleteQuery(BaseQuery):
     def __init__(self, table: str):
         super().__init__(table)
 
-    
     def build(self):
+        self.params.clear()
         where_sql = self.compile(self.filters) if self.filters else "1=1"
 
         sql = f"DELETE FROM {self.table} WHERE {where_sql}"
@@ -153,6 +173,7 @@ class InsertQuery(BaseQuery):
         self.values = values
     
     def build(self):
+        self.params.clear()
         if not self.values:
             raise ValueError("InsertQuery.values is empty")
 

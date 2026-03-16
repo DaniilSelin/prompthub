@@ -1,6 +1,7 @@
 from typing import Any
 from datetime import datetime
-from repository.queries import BaseQuery
+
+from repository.queries import BaseQuery, SearchQuery
 from repository.query_factory import QueryFactory
 from core.domain.operations import (
     Operation,
@@ -9,7 +10,12 @@ from core.domain.operations import (
     ReplaceOperation,
 )
 
+import sqlite3
 import difflib
+
+"""
+неудача 2. перепишу так же потом.
+"""
 
 class PromptVersion:
     def __init__(
@@ -42,19 +48,29 @@ class PromptVersion:
 class Prompt(QueryFactory):
     tabel: str = "prompt_versions"
 
-    def __init__(self, id: str, tags: list | None = None, snapshot_interval: int = 10):
+    def __init__(self, id: str, db_path: str, tags: list | None = None, snapshot_interval: int = 10):
         self.id: str = id
         self.tags = tags or []
         self._versions_list: list[PromptVersion] = []
         self._versions_map: dict[str, PromptVersion] = {}
         self._next_int: int = 1
         self.snapshot_interval = max(1, snapshot_interval)
+        
+        self._conn = sqlite3.connect(db_path)
+        self._conn.row_factory = sqlite3.Row
 
     def execute(self, query: BaseQuery):
         sql, params = query.build()
-        print(sql)
-        print(params)
-        return []
+
+        cur = self._conn.cursor()
+        cur.execute(sql, params)
+
+        if isinstance(query, SearchQuery):
+            rows = cur.fetchall()
+            return [dict(r) for r in rows]
+
+        self._conn.commit()
+        return cur.rowcount
 
     def _make_new_id(self) -> str:
         vid = str(self._next_int)
