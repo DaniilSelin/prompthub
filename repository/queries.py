@@ -12,8 +12,19 @@ class BaseQuery:
         self._offset: int | None = None
         self.params: list[Any] = []
 
+    def clone(self):
+        q = self.__class__(self.table)
+        q.filters = self.filters
+        q._order_by = self._order_by
+        q._limit = self._limit
+        q._offset = self._offset
+        return q
+
     def filter(self, filter_obj: Filter):
-        self.filters = filter_obj
+        if self.filters is None:
+            self.filters = filter_obj
+        else:
+            self.filters = self.filters & filter_obj
         return self
 
     def order_by(self, field: str):

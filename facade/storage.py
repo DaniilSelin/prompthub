@@ -4,10 +4,10 @@ import sqlite3
 from core.domain.prompt_group import PromptGroup
 from repository.queries import BaseQuery, SearchQuery
 from repository.query_factory import QueryFactory
-from repository import _Fields
+from repository import Fields
 
 class Storage(QueryFactory):
-    table: str = _Fields._PROMPTS_TABLE
+    table: str = Fields._PROMPTS_TABLE
 
     def __init__(self, path: str):
         self.storage_path: Path = Path(path)
@@ -29,4 +29,4 @@ class Storage(QueryFactory):
         return cur.rowcount
     
     def make_group_prompt(self, query: BaseQuery) -> PromptGroup:
-        return PromptGroup(query, self._conn)
+        return PromptGroup( self._conn, query)
