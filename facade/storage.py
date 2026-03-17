@@ -1,10 +1,12 @@
+from facade.prompt import Prompt
+from facade.prompt_group import PromptGroup
+from repository.repo import PromptRepo
+from repository import Fields
+from repository.query_factory import QueryFactory
+from repository.queries import BaseQuery 
+
 from pathlib import Path
 import sqlite3
-
-from core.domain.prompt_group import PromptGroup
-from repository.queries import BaseQuery, SearchQuery
-from repository.query_factory import QueryFactory
-from repository import Fields
 
 class Storage(QueryFactory):
     table: str = Fields._PROMPTS_TABLE
@@ -13,20 +15,34 @@ class Storage(QueryFactory):
         self.storage_path: Path = Path(path)
         self._conn = sqlite3.connect(self.storage_path)
         self._conn.row_factory = sqlite3.Row
-        self._diff_engine = None
+
+        self.repo = PromptRepo(self._conn)
 
     def execute(self, query: BaseQuery):
-        sql, params = query.build()
+        return self.repo.execute(query)
 
-        cur = self._conn.cursor()
-        cur.execute(sql, params)
+    def create_prompt(
+        self,
+        name: str,
+        author: str | None = None,
+        snapshot_interval: int = 5,
+    ) -> Prompt:
+        prompt_id = self.repo.create_prompt(name, author, snapshot_interval)
+        return Prompt(prompt_id, self.repo)
 
-        if isinstance(query, SearchQuery):
-            rows = cur.fetchall()
-            return [dict(r) for r in rows]
+    def get_prompt(self, name: str) -> Prompt:
+        row = self.repo.get_prompt_by_name(name)
+        if not row:
+            raise ValueError("prompt not found")
 
-        self._conn.commit()
-        return cur.rowcount
-    
-    def make_group_prompt(self, query: BaseQuery) -> PromptGroup:
-        return PromptGroup( self._conn, query)
+        return Prompt(row["id"], self.repo)
+
+    def delete_prompt(self, name: str):
+        row = self.repo.get_prompt_by_name(name)
+        if not row:
+            return 0
+
+        return self.repo.delete_prompt(row["id"])
+
+    def make_group_prompt(self) -> PromptGroup:
+        return PromptGroup(self.repo)

@@ -1,0 +1,231 @@
+import sqlite3
+from typing import List, Optional
+
+from core.domain.operations import InsertOperation, DeleteOperation, ReplaceOperation, Operation
+from repository import Fields, _INIT_SCHEMA_SQL
+from repository.queries import BaseQuery, SearchQuery
+
+class PromptRepo:
+    def __init__(self, conn: sqlite3.Connection):
+        self.conn = conn
+        self._init_schema()
+
+    def _init_schema(self):
+        self.conn.executescript(_INIT_SCHEMA_SQL)
+        self.conn.commit()
+
+    def execute(self, query: BaseQuery):
+        sql, params = query.build()
+
+        cur = self.conn.cursor()
+        cur.execute(sql, params)
+
+        if isinstance(query, SearchQuery):
+            return [dict(r) for r in cur.fetchall()]
+
+        self.conn.commit()
+        return cur.rowcount
+    
+
+    def create_prompt(
+            self,
+            name: str,
+            author: str | None = None,
+            snapshot_interval: int = 5,
+        ) -> int:
+            cur = self.conn.cursor()
+
+            cur.execute(f"""
+                INSERT INTO {Fields._PROMPTS_TABLE}
+                ({Fields.PROMPT_NAME}, {Fields.PROMPT_AUTHOR}, snapshot_interval)
+                VALUES (?, ?, ?)
+            """, (name, author, snapshot_interval))
+
+            self.conn.commit()
+            return cur.lastrowid
+
+    def get_prompt_by_name(self, name: str):
+        cur = self.conn.cursor()
+
+        cur.execute(f"""
+            SELECT * FROM {Fields._PROMPTS_TABLE}
+            WHERE {Fields.PROMPT_NAME} = ?
+        """, (name,))
+
+        return cur.fetchone()
+
+    def delete_prompt(self, prompt_id: int):
+        cur = self.conn.cursor()
+
+        cur.execute(f"""
+            DELETE FROM {Fields._PROMPTS_TABLE}
+            WHERE {Fields._PROMPT_ID} = ?
+        """, (prompt_id,))
+
+        self.conn.commit()
+        return cur.rowcount
+
+    def get_prompt(self, prompt_id: int):
+        cur = self.conn.cursor()
+        cur.execute(f"""
+            SELECT * FROM {Fields._PROMPTS_TABLE}
+            WHERE {Fields._PROMPT_ID} = ?
+        """, (prompt_id,))
+        return cur.fetchone()
+    
+    def get_latest_version(self, prompt_id: int):
+        cur = self.conn.cursor()
+        cur.execute(f"""
+            SELECT * FROM {Fields._PROMPT_VERSIONS_TABLE}
+            WHERE {Fields.PROMPT_VERSIONS_PROMPT_ID} = ?
+            ORDER BY seq DESC LIMIT 1
+        """, (prompt_id,))
+        return cur.fetchone()
+
+    def get_version_by_name(self, prompt_id: int, name: str):
+        cur = self.conn.cursor()
+        cur.execute(f"""
+            SELECT * FROM {Fields._PROMPT_VERSIONS_TABLE}
+            WHERE {Fields.PROMPT_VERSIONS_PROMPT_ID} = ?
+              AND {Fields.PROMPT_VERSIONS_NAME} = ?
+        """, (prompt_id, name))
+        return cur.fetchone()
+
+    def list_versions(self, prompt_id: int):
+        cur = self.conn.cursor()
+        cur.execute(f"""
+            SELECT id, {Fields.PROMPT_VERSIONS_NAME}, seq, snapshot_content,
+                   {Fields.PROMPT_VERSIONS_AUTHOR}, {Fields.PROMPT_VERSIONS_MESSAGE}
+            FROM {Fields._PROMPT_VERSIONS_TABLE}
+            WHERE {Fields.PROMPT_VERSIONS_PROMPT_ID} = ?
+            ORDER BY seq ASC
+        """, (prompt_id,))
+        return cur.fetchall()
+
+    def insert_version(
+        self,
+        prompt_id: int,
+        name: str,
+        seq: int,
+        parent_id: Optional[int],
+        snapshot_content: Optional[str],
+        author: Optional[str],
+        message: Optional[str],
+        changes: List[Operation],
+    ):
+        cur = self.conn.cursor()
+
+        cur.execute(f"""
+            INSERT INTO {Fields._PROMPT_VERSIONS_TABLE}
+            ({Fields.PROMPT_VERSIONS_PROMPT_ID}, {Fields.PROMPT_VERSIONS_NAME},
+             seq, parent_version_id, snapshot_content,
+             {Fields.PROMPT_VERSIONS_AUTHOR}, {Fields.PROMPT_VERSIONS_MESSAGE})
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            prompt_id,
+            name,
+            seq,
+            parent_id,
+            snapshot_content,
+            author,
+            message
+        ))
+
+        version_id = cur.lastrowid
+
+        for i, op in enumerate(changes):
+            self._insert_change(version_id, i, op)
+
+        self.conn.commit()
+        return version_id
+
+    def _insert_change(self, version_id: int, idx: int, op: Operation):
+        cur = self.conn.cursor()
+
+        if isinstance(op, InsertOperation):
+            cur.execute("""
+                INSERT INTO prompt_changes (version_id, op_index, op_type, pos, text)
+                VALUES (?, ?, 'insert', ?, ?)
+            """, (version_id, idx, op.pos, op.text))
+
+        elif isinstance(op, DeleteOperation):
+            cur.execute("""
+                INSERT INTO prompt_changes (version_id, op_index, op_type, start, end)
+                VALUES (?, ?, 'delete', ?, ?)
+            """, (version_id, idx, op.start, op.end))
+
+        elif isinstance(op, ReplaceOperation):
+            cur.execute("""
+                INSERT INTO prompt_changes (version_id, op_index, op_type, start, end, text)
+                VALUES (?, ?, 'replace', ?, ?, ?)
+            """, (version_id, idx, op.start, op.end, op.text))
+
+    def get_nearest_snapshot(self, prompt_id: int, seq: int):
+        cur = self.conn.cursor()
+        cur.execute(f"""
+            SELECT * FROM {Fields._PROMPT_VERSIONS_TABLE}
+            WHERE {Fields.PROMPT_VERSIONS_PROMPT_ID} = ?
+              AND snapshot_content IS NOT NULL
+              AND seq <= ?
+            ORDER BY seq DESC
+            LIMIT 1
+        """, (prompt_id, seq))
+        return cur.fetchone()
+
+    def get_versions_range(self, prompt_id: int, start: int, end: int):
+        cur = self.conn.cursor()
+        cur.execute(f"""
+            SELECT id, seq FROM {Fields._PROMPT_VERSIONS_TABLE}
+            WHERE {Fields.PROMPT_VERSIONS_PROMPT_ID} = ?
+              AND seq >= ? AND seq <= ?
+            ORDER BY seq ASC
+        """, (prompt_id, start, end))
+        return cur.fetchall()
+
+    def get_changes(self, version_id: int) -> List[Operation]:
+        cur = self.conn.cursor()
+        cur.execute("""
+            SELECT * FROM prompt_changes
+            WHERE version_id = ?
+            ORDER BY op_index
+        """, (version_id,))
+
+        ops = []
+        for r in cur.fetchall():
+            if r["op_type"] == "insert":
+                ops.append(InsertOperation(r["pos"], r["text"]))
+            elif r["op_type"] == "delete":
+                ops.append(DeleteOperation(r["start"], r["end"]))
+            else:
+                ops.append(ReplaceOperation(r["start"], r["end"], r["text"]))
+        return ops
+
+    def add_tag(self, prompt_id: int, tag_name: str, tag_type: str):
+        cur = self.conn.cursor()
+
+        cur.execute(f"""
+            INSERT OR IGNORE INTO {Fields._TAG_TABLE} ({Fields.TAG_NAME}, {Fields.TAG_TYPE})
+            VALUES (?, ?)
+        """, (tag_name, tag_type))
+
+        cur.execute(f"""
+            INSERT OR IGNORE INTO prompt_tags (prompt_id, tag_id)
+            SELECT ?, id FROM {Fields._TAG_TABLE}
+            WHERE {Fields.TAG_NAME} = ? AND {Fields.TAG_TYPE} = ?
+        """, (prompt_id, tag_name, tag_type))
+
+        self.conn.commit()
+
+    def remove_tag(self, prompt_id: int, tag_name: str, tag_type: str):
+        cur = self.conn.cursor()
+
+        cur.execute(f"""
+            DELETE FROM prompt_tags
+            WHERE prompt_id = ?
+              AND tag_id IN (
+                  SELECT id FROM {Fields._TAG_TABLE}
+                  WHERE {Fields.TAG_NAME} = ? AND {Fields.TAG_TYPE} = ?
+              )
+        """, (prompt_id, tag_name, tag_type))
+
+        self.conn.commit()

@@ -1,37 +1,20 @@
-import sqlite3
-from typing import List
 from repository.queries import BaseQuery, SearchQuery, InsertQuery, DeleteQuery, UpdateQuery
 from repository import Fields, TAG_PROMPT_TYPE
-from repository.query_factory import QueryFactory
-from search.filters import FieldEquals, FieldIn, RawCondition, Filter
-from .tag import PromptTag
+from search.filters import RawCondition, Filter
+from core.domain.tag import PromptTag
 
-class PromptGroup(QueryFactory):
+class PromptGroup:
     table: str = Fields._PROMPT_VERSIONS_TABLE
 
-    def __init__(self, conn: sqlite3.Connection, prompt_query: BaseQuery | None = None):
-        self._conn = conn
+    def __init__(self, repo, prompt_query: BaseQuery | None = None):
+        self.repo = repo
         self.prompt_query = prompt_query or SearchQuery(Fields._PROMPTS_TABLE)
 
     def _compile_prompt_query(self):
         sql, params = self.prompt_query.build()
+        return f"SELECT {Fields._PROMPT_ID} FROM ({sql}) AS sub", params
 
-        return f"SELECT {Fields._PROMPT_ID} FROM ({sql})", params
-
-    def _execute(self, query: BaseQuery):
-        sql, params = query.build()
-        cur = self._conn.cursor()
-        cur.execute(sql, params)
-
-        if isinstance(query, SearchQuery):
-            rows = cur.fetchall()
-            return [dict(r) for r in rows]
-
-        self._conn.commit()
-        return cur.rowcount
-    
     def _add_group_condition(self, query: BaseQuery) -> BaseQuery:
-
         sub_sql, sub_params = self._compile_prompt_query()
 
         cond = RawCondition(
@@ -39,31 +22,27 @@ class PromptGroup(QueryFactory):
             sub_params,
         )
 
-        if query.filters:
-            query.filter(query.filters & cond)
-        else:
-            query.filter(cond)
-
+        query.filters = query.filters & cond if query.filters else cond
         return query
 
-    def make_search_query(self, text: str = "") -> SearchQuery:
+    def filter_prompts(self, filter_obj: Filter):
+        new_query = self.prompt_query.clone()
+        new_query.filter(filter_obj)
+        return PromptGroup(self.repo, new_query)
+
+    def search_versions(self, text: str = "") -> SearchQuery:
         q = SearchQuery(self.table, text)
         return self._add_group_condition(q)
-    
-    # надо переделать ребаоту с insert в целом
-    # def make_insert_query(self, values: dict) -> InsertQuery:
-    #     return InsertQuery(self.table, values)
 
-    def make_update_query(self, values: dict) -> UpdateQuery:
+    def update_versions(self, values: dict) -> UpdateQuery:
         q = UpdateQuery(self.table, values)
         return self._add_group_condition(q)
 
-    def make_delete_query(self) -> DeleteQuery:
+    def delete_versions(self) -> DeleteQuery:
         q = DeleteQuery(self.table)
         return self._add_group_condition(q)
 
     def with_tag(self, tag_name: str, tag_type: str = TAG_PROMPT_TYPE):
-
         cond = RawCondition(
             f"""
             EXISTS (
@@ -79,16 +58,11 @@ class PromptGroup(QueryFactory):
         )
 
         new_query = self.prompt_query.clone()
+        new_query.filters = new_query.filters & cond if new_query.filters else cond
 
-        if new_query.filters:
-            new_query.filters = new_query.filters & cond
-        else:
-            new_query.filters = cond
+        return PromptGroup(self.repo, new_query)
 
-        return PromptGroup(self._conn, new_query)
-    
-    def without_tag(self, tag_name: str, tag_type: str = TAG_PROMPT_TYPE) -> "PromptGroup":
-
+    def without_tag(self, tag_name: str, tag_type: str = TAG_PROMPT_TYPE):
         cond = RawCondition(
             f"""
             NOT EXISTS (
@@ -103,33 +77,34 @@ class PromptGroup(QueryFactory):
             [tag_name, tag_type],
         )
 
-        new_query = SearchQuery(Fields._PROMPTS_TABLE)
-        new_query.filters = cond if not self.prompt_query.filters else self.prompt_query.filters & cond
+        new_query = self.prompt_query.clone()
+        new_query.filters = new_query.filters & cond if new_query.filters else cond
 
-        return PromptGroup(self._conn, new_query)
+        return PromptGroup(self.repo, new_query)
 
     def list_versions(self, version_filter: Filter | None = None):
-
         q = SearchQuery(self.table)
 
         if version_filter:
             q.filter(version_filter)
 
         q = self._add_group_condition(q)
+        return self.repo.execute(q)
 
-        return self._execute(q)
+    def execute(self, query: BaseQuery):
+        return self.repo.execute(self._add_group_condition(query))
 
     def count(self) -> int:
+        q = SearchQuery(Fields._PROMPTS_TABLE)
 
         sub_sql, params = self._compile_prompt_query()
 
-        sql = f"""
-        SELECT COUNT(*)
-        FROM {Fields._PROMPTS_TABLE}
-        WHERE {Fields._PROMPT_ID} IN ({sub_sql})
-        """
+        cond = RawCondition(
+            f"{Fields._PROMPT_ID} IN ({sub_sql})",
+            params,
+        )
 
-        cur = self._conn.cursor()
-        cur.execute(sql, params)
+        q.filters = cond
+        result = self.repo.execute(q)
 
-        return cur.fetchone()[0]
+        return len(result)
