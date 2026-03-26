@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Union
 from abc import abstractmethod
 
 from search.filters import Filter, FieldEquals, FieldGreater, FieldLike, FieldIn, RawCondition, FieldBetween, FieldNotNull, FieldIsNull
@@ -179,20 +179,33 @@ class DeleteQuery(BaseQuery):
         return sql, self.params.copy()
 
 class InsertQuery(BaseQuery):
-    def __init__(self, table: str, values: dict):
+    def __init__(self, table: str, rows: Union[dict[str, Any], list[dict[str, Any]]]):
         super().__init__(table)
-        self.values = values
-    
+        if isinstance(rows, dict):
+            self.rows = [rows]
+        else:
+            self.rows = rows
+
+        if not self.rows:
+            raise ValueError("InsertQuery.rows is empty")
+
+        keys_set = set(self.rows[0].keys())
+        for r in self.rows:
+            if set(r.keys()) != keys_set:
+                raise ValueError("All rows must have the same columns")
+        self.columns = list(self.rows[0].keys())
+
     def build(self):
-        self.params.clear()
-        if not self.values:
-            raise ValueError("InsertQuery.values is empty")
+        if not self.rows:
+            raise ValueError("InsertQuery.rows is empty")
 
-        fields = ", ".join(self.values.keys())
-        placeholders = ", ".join(["?"] * len(self.values))
+        placeholders = "(" + ", ".join("?" for _ in self.columns) + ")"
+        values_sql = ", ".join([placeholders] * len(self.rows))
 
-        sql = f"INSERT INTO {self.table} ({fields}) VALUES ({placeholders})"
+        sql = f"INSERT INTO {self.table} ({', '.join(self.columns)}) VALUES {values_sql}"
 
-        params = list(self.values.values())
+        params = []
+        for row in self.rows:
+            params.extend([row[col] for col in self.columns])
 
         return sql, params

@@ -281,3 +281,24 @@ count_pipeline = pg \
 
 print(f"→ count result: {count_pipeline}")
 print("\n" + "="*50)
+
+# Пример как будет пользователь исопльзовать группы промптов
+
+res = storage.execute(storage.make_group_prompt().filter_prompts(
+        FieldEquals(Fields.PROMPT_AUTHOR, "Author 1") |
+        FieldEquals(Fields.PROMPT_AUTHOR, "Author 2")
+    ) \
+    .with_tag("model_A", TAG_MODEL_TYPE) \
+    .without_tag("prompt_Z", TAG_PROMPT_TYPE) \
+    .search_versions() \
+    .filter(
+        (FieldGreater("seq", 1)) &
+        (
+            FieldEquals(Fields.PROMPT_VERSIONS_AUTHOR, "Author 1") |
+            FieldEquals(Fields.PROMPT_VERSIONS_AUTHOR, "Author 3")
+        )
+    )
+)
+
+for row in res:
+    print(dict(row))

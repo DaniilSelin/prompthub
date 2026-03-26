@@ -1,8 +1,8 @@
 from repository import Fields
+from repository import SNAPSHOT_INTERVAL
 from repository.queries import BaseQuery
 from repository.query_factory import QueryFactory
 from core.domain.operations import (
-    Operation,
     InsertOperation,
     DeleteOperation, 
     ReplaceOperation,
@@ -48,12 +48,11 @@ class Prompt(QueryFactory):
         id: int,
         repo,
         tags: list | None = None,
-        snapshot_interval: int = 5,
     ):
         self.id = id
         self.repo = repo
         self.tags = tags or []
-        self.snapshot_interval = snapshot_interval
+        self.snapshot_interval = SNAPSHOT_INTERVAL
 
     def execute(self, query: BaseQuery):
         return self.repo.execute(query)
@@ -99,6 +98,28 @@ class Prompt(QueryFactory):
             message=message,
             changes=changes,
         )
+
+    def rollback(self, name: str | None = None, steps_back: int | None = None):
+        versions = self.list_versions()  # список PromptVersion
+        if not versions:
+            raise ValueError("Нет версий для отката")
+
+        if name:
+            target = next((v for v in versions if v.name == name), None)
+            if not target:
+                raise ValueError(f"Версия {name} не найдена")
+        elif steps_back is not None:
+            if steps_back < 0 or steps_back >= len(versions):
+                raise ValueError(f"Некорректное количество шагов: {steps_back}")
+            target = versions[-(steps_back + 1)]
+        else:
+            raise ValueError("Нужно указать name или steps_back")
+
+        for v in versions:
+            if v.seq > target.seq:
+                self.repo.delete_version(v.id)
+
+        return target
 
     def get_version_content(self, name: str) -> str:
         v = self.repo.get_version_by_name(self.id, name)

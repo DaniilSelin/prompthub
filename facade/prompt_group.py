@@ -1,5 +1,5 @@
 from repository.queries import BaseQuery, SearchQuery, InsertQuery, DeleteQuery, UpdateQuery
-from repository import Fields, TAG_PROMPT_TYPE
+from repository import Fields, TAG_PROMPT_TYPE, SNAPSHOT_INTERVAL
 from search.filters import RawCondition, Filter
 from core.domain.tag import PromptTag
 

@@ -25,9 +25,8 @@ class Storage(QueryFactory):
         self,
         name: str,
         author: str | None = None,
-        snapshot_interval: int = 5,
     ) -> Prompt:
-        prompt_id = self.repo.create_prompt(name, author, snapshot_interval)
+        prompt_id = self.repo.create_prompt(name, author)
         return Prompt(prompt_id, self.repo)
 
     def get_prompt(self, name: str) -> Prompt:
