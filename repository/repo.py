@@ -1,8 +1,7 @@
 import sqlite3
-from typing import List, Optional
 
 from core.domain.operations import InsertOperation, DeleteOperation, ReplaceOperation, Operation
-from repository import Fields, _INIT_SCHEMA_SQL
+from repository import Fields, _INIT_SCHEMA_SQL, SNAPSHOT_INTERVAL
 from repository.queries import BaseQuery, SearchQuery
 
 class PromptRepo:
@@ -31,7 +30,6 @@ class PromptRepo:
             self,
             name: str,
             author: str | None = None,
-            snapshot_interval: int = 5,
         ) -> int:
             cur = self.conn.cursor()
 
@@ -39,7 +37,7 @@ class PromptRepo:
                 INSERT INTO {Fields._PROMPTS_TABLE}
                 ({Fields.PROMPT_NAME}, {Fields.PROMPT_AUTHOR}, snapshot_interval)
                 VALUES (?, ?, ?)
-            """, (name, author, snapshot_interval))
+            """, (name, author, SNAPSHOT_INTERVAL))
 
             self.conn.commit()
             return cur.lastrowid
@@ -107,11 +105,11 @@ class PromptRepo:
         prompt_id: int,
         name: str,
         seq: int,
-        parent_id: Optional[int],
-        snapshot_content: Optional[str],
-        author: Optional[str],
-        message: Optional[str],
-        changes: List[Operation],
+        parent_id: int | None,
+        snapshot_content: str | None,
+        author: str | None,
+        message: str | None,
+        changes: list[Operation],
     ):
         cur = self.conn.cursor()
 
@@ -182,7 +180,7 @@ class PromptRepo:
         """, (prompt_id, start, end))
         return cur.fetchall()
 
-    def get_changes(self, version_id: int) -> List[Operation]:
+    def get_changes(self, version_id: int) -> list[Operation]:
         cur = self.conn.cursor()
         cur.execute("""
             SELECT * FROM prompt_changes

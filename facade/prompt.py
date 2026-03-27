@@ -57,9 +57,6 @@ class Prompt(QueryFactory):
     def execute(self, query: BaseQuery):
         return self.repo.execute(query)
 
-    def execute(self, query: BaseQuery):
-        return self.repo.execute(query)
-
     def add_version(
         self,
         content: str,
@@ -82,8 +79,11 @@ class Prompt(QueryFactory):
             )
 
         prev_content = self.get_version_content(latest[Fields.PROMPT_VERSIONS_NAME])
-        changes = self._build_changeset(prev_content, content)
 
+        if prev_content == content:
+            raise ValueError("Новая версия не отличается от предыдущей")
+
+        changes = self._build_changeset(prev_content, content)
         new_seq = latest["seq"] + 1
 
         snapshot = content if new_seq % self.snapshot_interval == 0 else None
@@ -99,8 +99,8 @@ class Prompt(QueryFactory):
             changes=changes,
         )
 
-    def rollback(self, name: str | None = None, steps_back: int | None = None):
-        versions = self.list_versions()  # список PromptVersion
+    def rollback_hard(self, name: str | None = None, steps_back: int | None = None):
+        versions = self.list_versions()
         if not versions:
             raise ValueError("Нет версий для отката")
 
@@ -120,6 +120,38 @@ class Prompt(QueryFactory):
                 self.repo.delete_version(v.id)
 
         return target
+
+    def rollback(
+        self,
+        name: str | None = None,
+        steps_back: int | None = None,
+        name_rollback_version: str = "rollback_version",
+        author: str | None = None,
+    ):
+        versions = self.list_versions()
+        if not versions:
+            raise ValueError("Нет версий для отката")
+        
+        if name:
+            target = next((v for v in versions if v.name == name), None)
+            if not target:
+                raise ValueError(f"Версия {name} не найдена")
+            rollback_version_content = self.get_version_content(target.name)
+        elif steps_back is not None:
+            if steps_back < 0 or steps_back >= len(versions):
+                raise ValueError(f"Некорректное количество шагов: {steps_back}")
+            target = versions[-(steps_back + 1)]
+            rollback_version_content = self.get_version_content(target.name)
+        else:
+            raise ValueError("Нужно указать name или steps_back")
+
+        return self.add_version(
+            content = rollback_version_content,
+            name = name_rollback_version,
+            author = author,
+            message = "rollback to " + target.name,
+        )
+        
 
     def get_version_content(self, name: str) -> str:
         v = self.repo.get_version_by_name(self.id, name)
