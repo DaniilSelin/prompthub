@@ -50,6 +50,26 @@ class Storage(QueryFactory):
     def register_tariff(self, tag_name: str):
         self.repo.register_tariff(tag_name)
 
+    def remove_model_tags(self, name: str, model_tags: list[str]) -> list[str]:
+        row = self.repo.get_prompt_by_name(name)
+        if not row:
+            raise KeyError(f"Промпт '{name}' не найден")
+
+        prompt_id = row["id"]
+        current = self.repo.fetch_current_model_tags(prompt_id)
+
+        to_remove = []
+        for tag in model_tags:
+            if tag not in current:
+                warnings.warn(f"Тег '{tag}': не привязан к промпту — пропущен")
+            else:
+                to_remove.append(tag)
+
+        if to_remove:
+            self.repo.delete_prompt_model_tag_links(prompt_id, to_remove)
+
+        return to_remove
+
     def add_model_tags(self, name: str, model_tags: list[str]) -> list[str]:
         row = self.repo.get_prompt_by_name(name)
         if not row:

@@ -237,6 +237,10 @@ class PromptRepo:
         """, (prompt_id, TAG_MODEL_TYPE))
         return {r["name"] for r in cur.fetchall()}
 
+    def delete_prompt_model_tag_links(self, prompt_id: int, tag_names: list[str]):
+        for name in tag_names:
+            self.remove_tag(prompt_id, name, TAG_MODEL_TYPE)
+
     def create_prompt_model_tag_links(self, prompt_id: int, tag_names: list[str]):
         for name in tag_names:
             self.add_tag(prompt_id, name, TAG_MODEL_TYPE)
