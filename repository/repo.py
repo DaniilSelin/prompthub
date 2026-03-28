@@ -215,6 +215,26 @@ class PromptRepo:
         """, (prompt_id,))
         return cur.fetchall()
 
+    def execute_tag_filter_query(self, filter_obj) -> list:
+        from repository.queries import SearchQuery
+        q = SearchQuery(Fields._PROMPTS_TABLE)
+        q.filter(filter_obj)
+        sql, params = q.build()
+        cur = self.conn.cursor()
+        cur.execute(sql, params)
+        return cur.fetchall()
+
+    def fetch_metadata(self, prompt_id: int) -> dict:
+        prompt = self.get_prompt(prompt_id)
+        tags = self.list_tags(prompt_id)
+        return {
+            "name": prompt["name"],
+            "author": prompt["author"],
+            "created_at": prompt["created_at"],
+            "tags": [r["name"] for r in tags if r["type"] == "prompt"],
+            "model_tags": [r["name"] for r in tags if r["type"] == "model"],
+        }
+
     def fetch_all_tags(self) -> list:
         cur = self.conn.cursor()
         cur.execute(f"""

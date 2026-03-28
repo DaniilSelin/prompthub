@@ -47,6 +47,10 @@ class Storage(QueryFactory):
     def make_group_prompt(self) -> PromptGroup:
         return PromptGroup(self.repo)
 
+    def search_by_tags(self, filters) -> list[dict]:
+        rows = self.repo.execute_tag_filter_query(filters)
+        return [self.repo.fetch_metadata(r["id"]) for r in rows]
+
     def list_all_tags(self) -> list[dict]:
         rows = self.repo.fetch_all_tags()
         return [{"name": r["name"], "type": r["type"]} for r in rows]
