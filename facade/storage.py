@@ -7,6 +7,7 @@ from repository.queries import BaseQuery
 
 from pathlib import Path
 import sqlite3
+import warnings
 
 class Storage(QueryFactory):
     table: str = Fields._PROMPTS_TABLE
@@ -45,3 +46,29 @@ class Storage(QueryFactory):
 
     def make_group_prompt(self) -> PromptGroup:
         return PromptGroup(self.repo)
+
+    def register_tariff(self, tag_name: str):
+        self.repo.register_tariff(tag_name)
+
+    def add_model_tags(self, name: str, model_tags: list[str]) -> list[str]:
+        row = self.repo.get_prompt_by_name(name)
+        if not row:
+            raise KeyError(f"Промпт '{name}' не найден")
+
+        prompt_id = row["id"]
+        current = self.repo.fetch_current_model_tags(prompt_id)
+        available = self.repo.fetch_available_tariffs()
+
+        to_add = []
+        for tag in model_tags:
+            if tag in current:
+                warnings.warn(f"Тег '{tag}': дубликат — уже привязан к промпту")
+            elif tag not in available:
+                warnings.warn(f"Тег '{tag}': нет тарифа — пропущен")
+            else:
+                to_add.append(tag)
+
+        if to_add:
+            self.repo.create_prompt_model_tag_links(prompt_id, to_add)
+
+        return to_add

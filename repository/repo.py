@@ -1,7 +1,7 @@
 import sqlite3
 
 from core.domain.operations import InsertOperation, DeleteOperation, ReplaceOperation, Operation
-from repository import Fields, _INIT_SCHEMA_SQL, SNAPSHOT_INTERVAL
+from repository import Fields, _INIT_SCHEMA_SQL, SNAPSHOT_INTERVAL, TAG_MODEL_TYPE
 from repository.queries import BaseQuery, SearchQuery
 
 class PromptRepo:
@@ -214,6 +214,32 @@ class PromptRepo:
             ORDER BY t.{Fields.TAG_TYPE}, t.{Fields.TAG_NAME}
         """, (prompt_id,))
         return cur.fetchall()
+
+    def register_tariff(self, tag_name: str):
+        cur = self.conn.cursor()
+        cur.execute("""
+            INSERT OR IGNORE INTO model_tariffs (tag_name) VALUES (?)
+        """, (tag_name,))
+        self.conn.commit()
+
+    def fetch_available_tariffs(self) -> set[str]:
+        cur = self.conn.cursor()
+        cur.execute("SELECT tag_name FROM model_tariffs")
+        return {r["tag_name"] for r in cur.fetchall()}
+
+    def fetch_current_model_tags(self, prompt_id: int) -> set[str]:
+        cur = self.conn.cursor()
+        cur.execute(f"""
+            SELECT t.{Fields.TAG_NAME}
+            FROM {Fields._TAG_TABLE} t
+            JOIN prompt_tags pt ON pt.tag_id = t.id
+            WHERE pt.prompt_id = ? AND t.{Fields.TAG_TYPE} = ?
+        """, (prompt_id, TAG_MODEL_TYPE))
+        return {r["name"] for r in cur.fetchall()}
+
+    def create_prompt_model_tag_links(self, prompt_id: int, tag_names: list[str]):
+        for name in tag_names:
+            self.add_tag(prompt_id, name, TAG_MODEL_TYPE)
 
     def add_tag(self, prompt_id: int, tag_name: str, tag_type: str):
         cur = self.conn.cursor()
