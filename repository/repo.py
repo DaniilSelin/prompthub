@@ -11,6 +11,18 @@ class PromptRepo:
 
     def _init_schema(self):
         self.conn.executescript(_INIT_SCHEMA_SQL)
+        # миграция: добавить колонки если существующая БД создана без них
+        for col, definition in [
+            ("input_price_per_1k", "REAL DEFAULT 0.0"),
+            ("output_price_per_1k", "REAL DEFAULT 0.0"),
+            ("updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+        ]:
+            try:
+                self.conn.execute(
+                    f"ALTER TABLE model_tariffs ADD COLUMN {col} {definition}"
+                )
+            except Exception:
+                pass  # колонка уже существует
         self.conn.commit()
 
     def execute(self, query: BaseQuery):

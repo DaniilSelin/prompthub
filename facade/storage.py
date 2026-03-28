@@ -96,6 +96,16 @@ class Storage(QueryFactory):
         rows = self.repo.fetch_all_tags()
         return [{"name": r["name"], "type": r["type"]} for r in rows]
 
+    def update_tariffs(self, url: str | None = None) -> int:
+        from infrastructure.pricing_gateway import PricingAPIGateway
+        from infrastructure.tariff_manager import TariffManager
+
+        gateway = PricingAPIGateway(**({"url": url} if url else {}))
+        tariffs = gateway.fetch_pricing_data()   # ConnectionError / ValueError
+
+        manager = TariffManager(self._conn)
+        return manager.bulk_upsert(tariffs)      # RuntimeError при ошибке БД
+
     def register_tariff(self, tag_name: str):
         self.repo.register_tariff(tag_name)
 
