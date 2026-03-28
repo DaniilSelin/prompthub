@@ -143,6 +143,11 @@ class PromptRepo:
         self.conn.commit()
         return version_id
 
+    def delete_version(self, version_id: int):
+        cur = self.conn.cursor()
+        cur.execute(f"DELETE FROM {Fields._PROMPT_VERSIONS_TABLE} WHERE id = ?", (version_id,))
+        self.conn.commit()
+
     def _insert_change(self, version_id: int, idx: int, op: Operation):
         cur = self.conn.cursor()
 
