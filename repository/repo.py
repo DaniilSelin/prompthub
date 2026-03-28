@@ -204,6 +204,17 @@ class PromptRepo:
                 ops.append(ReplaceOperation(r["start"], r["end"], r["text"]))
         return ops
 
+    def list_tags(self, prompt_id: int):
+        cur = self.conn.cursor()
+        cur.execute(f"""
+            SELECT t.{Fields.TAG_NAME}, t.{Fields.TAG_TYPE}
+            FROM {Fields._TAG_TABLE} t
+            JOIN prompt_tags pt ON pt.tag_id = t.id
+            WHERE pt.prompt_id = ?
+            ORDER BY t.{Fields.TAG_TYPE}, t.{Fields.TAG_NAME}
+        """, (prompt_id,))
+        return cur.fetchall()
+
     def add_tag(self, prompt_id: int, tag_name: str, tag_type: str):
         cur = self.conn.cursor()
 

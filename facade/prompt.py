@@ -179,6 +179,10 @@ class Prompt(QueryFactory):
             for r in rows
         ]
 
+    def list_tags(self) -> list[dict]:
+        rows = self.repo.list_tags(self.id)
+        return [{"name": r["name"], "type": r["type"]} for r in rows]
+
     def add_tag(self, tag_name: str, tag_type: str):
         self.repo.add_tag(self.id, tag_name, tag_type)
 
