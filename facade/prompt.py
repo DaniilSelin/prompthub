@@ -162,8 +162,22 @@ class Prompt(QueryFactory):
 
         return self._assemble(v["seq"])
 
-    def list_versions(self):
-        return self.repo.list_versions(self.id)
+    def list_versions(self) -> list["PromptVersion"]:
+        rows = self.repo.list_versions(self.id)
+        return [
+            PromptVersion(
+                id=r["id"],
+                prompt_id=r["prompt_id"],
+                name=r["name"],
+                seq=r["seq"],
+                parent_id=r["parent_version_id"],
+                snapshot_content=r["snapshot_content"],
+                author=r["author"],
+                message=r["message"],
+                created_at=r["created_at"],
+            )
+            for r in rows
+        ]
 
     def add_tag(self, tag_name: str, tag_type: str):
         self.repo.add_tag(self.id, tag_name, tag_type)

@@ -92,13 +92,19 @@ class PromptRepo:
     def list_versions(self, prompt_id: int):
         cur = self.conn.cursor()
         cur.execute(f"""
-            SELECT id, {Fields.PROMPT_VERSIONS_NAME}, seq, snapshot_content,
-                   {Fields.PROMPT_VERSIONS_AUTHOR}, {Fields.PROMPT_VERSIONS_MESSAGE}
+            SELECT *
             FROM {Fields._PROMPT_VERSIONS_TABLE}
             WHERE {Fields.PROMPT_VERSIONS_PROMPT_ID} = ?
             ORDER BY seq ASC
         """, (prompt_id,))
         return cur.fetchall()
+
+    def delete_version(self, version_id: int):
+        cur = self.conn.cursor()
+        cur.execute("""
+            DELETE FROM prompt_versions WHERE id = ?
+        """, (version_id,))
+        self.conn.commit()
 
     def insert_version(
         self,
