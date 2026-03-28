@@ -52,6 +52,9 @@ class PromptRepo:
 
         return cur.fetchone()
 
+    def find_by_name_exact(self, name: str):
+        return self.get_prompt_by_name(name)
+
     def delete_prompt(self, prompt_id: int):
         cur = self.conn.cursor()
 
@@ -232,10 +235,19 @@ class PromptRepo:
     def fetch_metadata(self, prompt_id: int) -> dict:
         prompt = self.get_prompt(prompt_id)
         tags = self.list_tags(prompt_id)
+        cur = self.conn.cursor()
+        cur.execute(f"""
+            SELECT {Fields.PROMPT_VERSIONS_CREATED_AT}
+            FROM {Fields._PROMPT_VERSIONS_TABLE}
+            WHERE {Fields.PROMPT_VERSIONS_PROMPT_ID} = ?
+            ORDER BY seq DESC LIMIT 1
+        """, (prompt_id,))
+        last_ver = cur.fetchone()
         return {
             "name": prompt["name"],
             "author": prompt["author"],
             "created_at": prompt["created_at"],
+            "updated_at": last_ver["created_at"] if last_ver else None,
             "tags": [r["name"] for r in tags if r["type"] == "prompt"],
             "model_tags": [r["name"] for r in tags if r["type"] == "model"],
         }
