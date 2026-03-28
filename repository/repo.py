@@ -1,8 +1,14 @@
 import sqlite3
 
-from core.domain.operations import InsertOperation, DeleteOperation, ReplaceOperation, Operation
+from core.domain.operations import (
+    InsertOperation,
+    DeleteOperation,
+    ReplaceOperation,
+    Operation,
+)
 from repository import Fields, _INIT_SCHEMA_SQL, SNAPSHOT_INTERVAL, TAG_MODEL_TYPE
 from repository.queries import BaseQuery, SearchQuery
+
 
 class PromptRepo:
     def __init__(self, conn: sqlite3.Connection):
@@ -36,31 +42,36 @@ class PromptRepo:
 
         self.conn.commit()
         return cur.rowcount
-    
 
     def create_prompt(
-            self,
-            name: str,
-            author: str | None = None,
-        ) -> int:
-            cur = self.conn.cursor()
+        self,
+        name: str,
+        author: str | None = None,
+    ) -> int:
+        cur = self.conn.cursor()
 
-            cur.execute(f"""
+        cur.execute(
+            f"""
                 INSERT INTO {Fields._PROMPTS_TABLE}
                 ({Fields.PROMPT_NAME}, {Fields.PROMPT_AUTHOR}, snapshot_interval)
                 VALUES (?, ?, ?)
-            """, (name, author, SNAPSHOT_INTERVAL))
+            """,
+            (name, author, SNAPSHOT_INTERVAL),
+        )
 
-            self.conn.commit()
-            return cur.lastrowid
+        self.conn.commit()
+        return cur.lastrowid
 
     def get_prompt_by_name(self, name: str):
         cur = self.conn.cursor()
 
-        cur.execute(f"""
+        cur.execute(
+            f"""
             SELECT * FROM {Fields._PROMPTS_TABLE}
             WHERE {Fields.PROMPT_NAME} = ?
-        """, (name,))
+        """,
+            (name,),
+        )
 
         return cur.fetchone()
 
@@ -70,48 +81,63 @@ class PromptRepo:
     def delete_prompt(self, prompt_id: int):
         cur = self.conn.cursor()
 
-        cur.execute(f"""
+        cur.execute(
+            f"""
             DELETE FROM {Fields._PROMPTS_TABLE}
             WHERE {Fields._PROMPT_ID} = ?
-        """, (prompt_id,))
+        """,
+            (prompt_id,),
+        )
 
         self.conn.commit()
         return cur.rowcount
 
     def get_prompt(self, prompt_id: int):
         cur = self.conn.cursor()
-        cur.execute(f"""
+        cur.execute(
+            f"""
             SELECT * FROM {Fields._PROMPTS_TABLE}
             WHERE {Fields._PROMPT_ID} = ?
-        """, (prompt_id,))
+        """,
+            (prompt_id,),
+        )
         return cur.fetchone()
-    
+
     def get_latest_version(self, prompt_id: int):
         cur = self.conn.cursor()
-        cur.execute(f"""
+        cur.execute(
+            f"""
             SELECT * FROM {Fields._PROMPT_VERSIONS_TABLE}
             WHERE {Fields.PROMPT_VERSIONS_PROMPT_ID} = ?
             ORDER BY seq DESC LIMIT 1
-        """, (prompt_id,))
+        """,
+            (prompt_id,),
+        )
         return cur.fetchone()
 
     def get_version_by_name(self, prompt_id: int, name: str):
         cur = self.conn.cursor()
-        cur.execute(f"""
+        cur.execute(
+            f"""
             SELECT * FROM {Fields._PROMPT_VERSIONS_TABLE}
             WHERE {Fields.PROMPT_VERSIONS_PROMPT_ID} = ?
               AND {Fields.PROMPT_VERSIONS_NAME} = ?
-        """, (prompt_id, name))
+        """,
+            (prompt_id, name),
+        )
         return cur.fetchone()
 
     def list_versions(self, prompt_id: int):
         cur = self.conn.cursor()
-        cur.execute(f"""
+        cur.execute(
+            f"""
             SELECT *
             FROM {Fields._PROMPT_VERSIONS_TABLE}
             WHERE {Fields.PROMPT_VERSIONS_PROMPT_ID} = ?
             ORDER BY seq ASC
-        """, (prompt_id,))
+        """,
+            (prompt_id,),
+        )
         return cur.fetchall()
 
     def insert_version(
@@ -127,21 +153,16 @@ class PromptRepo:
     ):
         cur = self.conn.cursor()
 
-        cur.execute(f"""
+        cur.execute(
+            f"""
             INSERT INTO {Fields._PROMPT_VERSIONS_TABLE}
             ({Fields.PROMPT_VERSIONS_PROMPT_ID}, {Fields.PROMPT_VERSIONS_NAME},
              seq, parent_version_id, snapshot_content,
              {Fields.PROMPT_VERSIONS_AUTHOR}, {Fields.PROMPT_VERSIONS_MESSAGE})
             VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            prompt_id,
-            name,
-            seq,
-            parent_id,
-            snapshot_content,
-            author,
-            message
-        ))
+        """,
+            (prompt_id, name, seq, parent_id, snapshot_content, author, message),
+        )
 
         version_id = cur.lastrowid
 
@@ -153,59 +174,79 @@ class PromptRepo:
 
     def delete_version(self, version_id: int):
         cur = self.conn.cursor()
-        cur.execute(f"DELETE FROM {Fields._PROMPT_VERSIONS_TABLE} WHERE id = ?", (version_id,))
+        cur.execute(
+            f"DELETE FROM {Fields._PROMPT_VERSIONS_TABLE} WHERE id = ?", (version_id,)
+        )
         self.conn.commit()
 
     def _insert_change(self, version_id: int, idx: int, op: Operation):
         cur = self.conn.cursor()
 
         if isinstance(op, InsertOperation):
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO prompt_changes (version_id, op_index, op_type, pos, text)
                 VALUES (?, ?, 'insert', ?, ?)
-            """, (version_id, idx, op.pos, op.text))
+            """,
+                (version_id, idx, op.pos, op.text),
+            )
 
         elif isinstance(op, DeleteOperation):
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO prompt_changes (version_id, op_index, op_type, start, end)
                 VALUES (?, ?, 'delete', ?, ?)
-            """, (version_id, idx, op.start, op.end))
+            """,
+                (version_id, idx, op.start, op.end),
+            )
 
         elif isinstance(op, ReplaceOperation):
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO prompt_changes (version_id, op_index, op_type, start, end, text)
                 VALUES (?, ?, 'replace', ?, ?, ?)
-            """, (version_id, idx, op.start, op.end, op.text))
+            """,
+                (version_id, idx, op.start, op.end, op.text),
+            )
 
     def get_nearest_snapshot(self, prompt_id: int, seq: int):
         cur = self.conn.cursor()
-        cur.execute(f"""
+        cur.execute(
+            f"""
             SELECT * FROM {Fields._PROMPT_VERSIONS_TABLE}
             WHERE {Fields.PROMPT_VERSIONS_PROMPT_ID} = ?
               AND snapshot_content IS NOT NULL
               AND seq <= ?
             ORDER BY seq DESC
             LIMIT 1
-        """, (prompt_id, seq))
+        """,
+            (prompt_id, seq),
+        )
         return cur.fetchone()
 
     def get_versions_range(self, prompt_id: int, start: int, end: int):
         cur = self.conn.cursor()
-        cur.execute(f"""
+        cur.execute(
+            f"""
             SELECT id, seq FROM {Fields._PROMPT_VERSIONS_TABLE}
             WHERE {Fields.PROMPT_VERSIONS_PROMPT_ID} = ?
               AND seq >= ? AND seq <= ?
             ORDER BY seq ASC
-        """, (prompt_id, start, end))
+        """,
+            (prompt_id, start, end),
+        )
         return cur.fetchall()
 
     def get_changes(self, version_id: int) -> list[Operation]:
         cur = self.conn.cursor()
-        cur.execute("""
+        cur.execute(
+            """
             SELECT * FROM prompt_changes
             WHERE version_id = ?
             ORDER BY op_index
-        """, (version_id,))
+        """,
+            (version_id,),
+        )
 
         ops = []
         for r in cur.fetchall():
@@ -219,17 +260,21 @@ class PromptRepo:
 
     def list_tags(self, prompt_id: int):
         cur = self.conn.cursor()
-        cur.execute(f"""
+        cur.execute(
+            f"""
             SELECT t.{Fields.TAG_NAME}, t.{Fields.TAG_TYPE}
             FROM {Fields._TAG_TABLE} t
             JOIN prompt_tags pt ON pt.tag_id = t.id
             WHERE pt.prompt_id = ?
             ORDER BY t.{Fields.TAG_TYPE}, t.{Fields.TAG_NAME}
-        """, (prompt_id,))
+        """,
+            (prompt_id,),
+        )
         return cur.fetchall()
 
     def execute_tag_filter_query(self, filter_obj) -> list:
         from repository.queries import SearchQuery
+
         q = SearchQuery(Fields._PROMPTS_TABLE)
         q.filter(filter_obj)
         sql, params = q.build()
@@ -241,12 +286,15 @@ class PromptRepo:
         prompt = self.get_prompt(prompt_id)
         tags = self.list_tags(prompt_id)
         cur = self.conn.cursor()
-        cur.execute(f"""
+        cur.execute(
+            f"""
             SELECT {Fields.PROMPT_VERSIONS_CREATED_AT}
             FROM {Fields._PROMPT_VERSIONS_TABLE}
             WHERE {Fields.PROMPT_VERSIONS_PROMPT_ID} = ?
             ORDER BY seq DESC LIMIT 1
-        """, (prompt_id,))
+        """,
+            (prompt_id,),
+        )
         last_ver = cur.fetchone()
         return {
             "name": prompt["name"],
@@ -259,7 +307,9 @@ class PromptRepo:
 
     def fetch_all_prompts(self) -> list:
         cur = self.conn.cursor()
-        cur.execute(f"SELECT id FROM {Fields._PROMPTS_TABLE} ORDER BY {Fields.PROMPT_NAME}")
+        cur.execute(
+            f"SELECT id FROM {Fields._PROMPTS_TABLE} ORDER BY {Fields.PROMPT_NAME}"
+        )
         return cur.fetchall()
 
     def fetch_tariffs(self, tag_names: list[str]) -> dict:
@@ -276,18 +326,23 @@ class PromptRepo:
 
     def fetch_all_tags(self) -> list:
         cur = self.conn.cursor()
-        cur.execute(f"""
+        cur.execute(
+            f"""
             SELECT {Fields.TAG_NAME}, {Fields.TAG_TYPE}
             FROM {Fields._TAG_TABLE}
             ORDER BY {Fields.TAG_TYPE}, {Fields.TAG_NAME}
-        """)
+        """
+        )
         return cur.fetchall()
 
     def register_tariff(self, tag_name: str):
         cur = self.conn.cursor()
-        cur.execute("""
+        cur.execute(
+            """
             INSERT OR IGNORE INTO model_tariffs (tag_name) VALUES (?)
-        """, (tag_name,))
+        """,
+            (tag_name,),
+        )
         self.conn.commit()
 
     def fetch_available_tariffs(self) -> set[str]:
@@ -297,12 +352,15 @@ class PromptRepo:
 
     def fetch_current_model_tags(self, prompt_id: int) -> set[str]:
         cur = self.conn.cursor()
-        cur.execute(f"""
+        cur.execute(
+            f"""
             SELECT t.{Fields.TAG_NAME}
             FROM {Fields._TAG_TABLE} t
             JOIN prompt_tags pt ON pt.tag_id = t.id
             WHERE pt.prompt_id = ? AND t.{Fields.TAG_TYPE} = ?
-        """, (prompt_id, TAG_MODEL_TYPE))
+        """,
+            (prompt_id, TAG_MODEL_TYPE),
+        )
         return {r["name"] for r in cur.fetchall()}
 
     def delete_prompt_model_tag_links(self, prompt_id: int, tag_names: list[str]):
@@ -316,29 +374,38 @@ class PromptRepo:
     def add_tag(self, prompt_id: int, tag_name: str, tag_type: str):
         cur = self.conn.cursor()
 
-        cur.execute(f"""
+        cur.execute(
+            f"""
             INSERT OR IGNORE INTO {Fields._TAG_TABLE} ({Fields.TAG_NAME}, {Fields.TAG_TYPE})
             VALUES (?, ?)
-        """, (tag_name, tag_type))
+        """,
+            (tag_name, tag_type),
+        )
 
-        cur.execute(f"""
+        cur.execute(
+            f"""
             INSERT OR IGNORE INTO prompt_tags (prompt_id, tag_id)
             SELECT ?, id FROM {Fields._TAG_TABLE}
             WHERE {Fields.TAG_NAME} = ? AND {Fields.TAG_TYPE} = ?
-        """, (prompt_id, tag_name, tag_type))
+        """,
+            (prompt_id, tag_name, tag_type),
+        )
 
         self.conn.commit()
 
     def remove_tag(self, prompt_id: int, tag_name: str, tag_type: str):
         cur = self.conn.cursor()
 
-        cur.execute(f"""
+        cur.execute(
+            f"""
             DELETE FROM prompt_tags
             WHERE prompt_id = ?
               AND tag_id IN (
                   SELECT id FROM {Fields._TAG_TABLE}
                   WHERE {Fields.TAG_NAME} = ? AND {Fields.TAG_TYPE} = ?
               )
-        """, (prompt_id, tag_name, tag_type))
+        """,
+            (prompt_id, tag_name, tag_type),
+        )
 
         self.conn.commit()

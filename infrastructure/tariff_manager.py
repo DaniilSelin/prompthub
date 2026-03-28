@@ -21,13 +21,21 @@ class TariffManager:
                                output_price_per_1k = ?,
                                updated_at = CURRENT_TIMESTAMP
                            WHERE tag_name = ?""",
-                        (tariff.input_price_per_1k, tariff.output_price_per_1k, tariff.tag_name),
+                        (
+                            tariff.input_price_per_1k,
+                            tariff.output_price_per_1k,
+                            tariff.tag_name,
+                        ),
                     )
                 else:
                     cur.execute(
                         """INSERT INTO model_tariffs (tag_name, input_price_per_1k, output_price_per_1k)
                            VALUES (?, ?, ?)""",
-                        (tariff.tag_name, tariff.input_price_per_1k, tariff.output_price_per_1k),
+                        (
+                            tariff.tag_name,
+                            tariff.input_price_per_1k,
+                            tariff.output_price_per_1k,
+                        ),
                     )
             self.conn.commit()
             return len(tariffs)

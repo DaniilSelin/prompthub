@@ -1,6 +1,7 @@
 from abc import ABC
 from typing import Any
 
+
 class Condition(ABC):
     def __and__(self, other: "Condition") -> "Filter":
         return Filter(must=[self, other])
@@ -19,6 +20,7 @@ class Condition(ABC):
 
     def __repr__(self) -> str:
         return self.__class__.__name__
+
 
 class FieldEquals(Condition):
     def __init__(self, field: str, value: Any):
@@ -46,6 +48,7 @@ class FieldLike(Condition):
     def __repr__(self) -> str:
         return f"Like({self.field!s} LIKE {self.pattern!r})"
 
+
 class FieldIn(Condition):
     def __init__(self, field: str, values: list):
         self.field = field
@@ -53,6 +56,7 @@ class FieldIn(Condition):
 
     def __repr__(self):
         return f"In({self.field} IN {self.values})"
+
 
 class FieldBetween(Condition):
     def __init__(self, field: str, low, high):
@@ -63,6 +67,7 @@ class FieldBetween(Condition):
     def __repr__(self):
         return f"Between({self.field} BETWEEN {self.low} AND {self.high})"
 
+
 class FieldIsNull(Condition):
     def __init__(self, field: str):
         self.field = field
@@ -70,12 +75,14 @@ class FieldIsNull(Condition):
     def __repr__(self):
         return f"IsNull({self.field} IS NULL)"
 
+
 class FieldNotNull(Condition):
     def __init__(self, field: str):
         self.field = field
 
     def __repr__(self):
         return f"NotNull({self.field} IS NOT NULL)"
+
 
 class RawCondition(Condition):
     def __init__(self, sql: str, params: list | None = None):
@@ -88,6 +95,7 @@ class RawCondition(Condition):
 
 class TagFilter(RawCondition):
     """Фильтр промптов по тегу. Используется в search_by_tags()."""
+
     def __init__(self, name: str, tag_type: str | None = None):
         if tag_type:
             sql = (
@@ -112,9 +120,12 @@ class TagFilter(RawCondition):
     def __repr__(self):
         return f"TagFilter(sql={self.sql!r})"
 
+
 """
 Сплющивание всё таки приводило к серьёзным ошибкам. Вернул логику вложенных фильтров.
 """
+
+
 class Filter(Condition):
     def __init__(self, must=None, should=None, must_not=None):
         self.must = must or []
@@ -136,7 +147,10 @@ class Filter(Condition):
 
     def __repr__(self):
         parts = []
-        if self.must: parts.append("AND[" + ", ".join(repr(p) for p in self.must) + "]")
-        if self.should: parts.append("OR[" + ", ".join(repr(p) for p in self.should) + "]")
-        if self.must_not: parts.append("NOT[" + ", ".join(repr(p) for p in self.must_not) + "]")
+        if self.must:
+            parts.append("AND[" + ", ".join(repr(p) for p in self.must) + "]")
+        if self.should:
+            parts.append("OR[" + ", ".join(repr(p) for p in self.should) + "]")
+        if self.must_not:
+            parts.append("NOT[" + ", ".join(repr(p) for p in self.must_not) + "]")
         return "Filter(" + " ".join(parts) + ")"

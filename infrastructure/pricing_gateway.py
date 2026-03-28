@@ -35,9 +35,11 @@ class PricingAPIGateway:
         for item in items:
             tag_name = item["id"]
             pricing = item.get("pricing", {})
-            result.append(ModelTariff(
-                tag_name=tag_name,
-                input_price_per_1k=float(pricing.get("prompt", 0.0)),
-                output_price_per_1k=float(pricing.get("completion", 0.0)),
-            ))
+            result.append(
+                ModelTariff(
+                    tag_name=tag_name,
+                    input_price_per_1k=float(pricing.get("prompt", 0.0)),
+                    output_price_per_1k=float(pricing.get("completion", 0.0)),
+                )
+            )
         return result

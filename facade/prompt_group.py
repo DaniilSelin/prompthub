@@ -1,7 +1,14 @@
-from repository.queries import BaseQuery, SearchQuery, InsertQuery, DeleteQuery, UpdateQuery
+from repository.queries import (
+    BaseQuery,
+    SearchQuery,
+    InsertQuery,
+    DeleteQuery,
+    UpdateQuery,
+)
 from repository import Fields, TAG_PROMPT_TYPE, SNAPSHOT_INTERVAL
 from search.filters import RawCondition, Filter
 from core.domain.tag import PromptTag
+
 
 class PromptGroup:
     table: str = Fields._PROMPT_VERSIONS_TABLE

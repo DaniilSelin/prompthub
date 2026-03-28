@@ -3,11 +3,12 @@ from facade.prompt_group import PromptGroup
 from repository.repo import PromptRepo
 from repository import Fields
 from repository.query_factory import QueryFactory
-from repository.queries import BaseQuery 
+from repository.queries import BaseQuery
 
 from pathlib import Path
 import sqlite3
 import warnings
+
 
 class Storage(QueryFactory):
     table: str = Fields._PROMPTS_TABLE
@@ -94,6 +95,7 @@ class Storage(QueryFactory):
 
     def list_prompts(self) -> list[dict]:
         import warnings
+
         rows = self.repo.fetch_all_prompts()
         if not rows:
             return []
@@ -118,11 +120,15 @@ class Storage(QueryFactory):
                 tariffs = self.repo.fetch_tariffs(model_tags)
                 for tag in model_tags:
                     if tag not in tariffs:
-                        warnings.warn(f"Тариф для модели '{tag}' не найден — стоимость не рассчитана")
+                        warnings.warn(
+                            f"Тариф для модели '{tag}' не найден — стоимость не рассчитана"
+                        )
                         entry["costs"][tag] = None
                     else:
                         tariff = tariffs[tag]
-                        entry["costs"][tag] = round(token_count / 1000 * tariff["input_price_per_1k"], 6)
+                        entry["costs"][tag] = round(
+                            token_count / 1000 * tariff["input_price_per_1k"], 6
+                        )
 
             result.append(entry)
 
@@ -137,10 +143,10 @@ class Storage(QueryFactory):
         from infrastructure.tariff_manager import TariffManager
 
         gateway = PricingAPIGateway(**({"url": url} if url else {}))
-        tariffs = gateway.fetch_pricing_data()   # ConnectionError / ValueError
+        tariffs = gateway.fetch_pricing_data()  # ConnectionError / ValueError
 
         manager = TariffManager(self._conn)
-        return manager.bulk_upsert(tariffs)      # RuntimeError при ошибке БД
+        return manager.bulk_upsert(tariffs)  # RuntimeError при ошибке БД
 
     def register_tariff(self, tag_name: str):
         self.repo.register_tariff(tag_name)

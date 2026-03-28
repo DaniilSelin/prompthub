@@ -1,7 +1,18 @@
 from typing import Any, Union
 from abc import abstractmethod
 
-from search.filters import Filter, FieldEquals, FieldGreater, FieldLike, FieldIn, RawCondition, FieldBetween, FieldNotNull, FieldIsNull
+from search.filters import (
+    Filter,
+    FieldEquals,
+    FieldGreater,
+    FieldLike,
+    FieldIn,
+    RawCondition,
+    FieldBetween,
+    FieldNotNull,
+    FieldIsNull,
+)
+
 
 class BaseQuery:
     def __init__(self, table: str):
@@ -38,7 +49,7 @@ class BaseQuery:
     def offset(self, n: int):
         self._offset = n
         return self
-    
+
     def compile(self, condition) -> str:
         if condition is None:
             return "1=1"
@@ -80,7 +91,7 @@ class BaseQuery:
             return self.compile_filter(condition)
 
         raise ValueError("Unknown condition type: %r" % (type(condition),))
-    
+
     def compile_group(self, conditions: list, joiner: str) -> str:
         if not conditions:
             return ""
@@ -92,7 +103,9 @@ class BaseQuery:
         return f" {joiner} ".join(parts)
 
     def compile_filter(self, filter_obj: Filter) -> str:
-        if not filter_obj or (not filter_obj.must and not filter_obj.should and not filter_obj.must_not):
+        if not filter_obj or (
+            not filter_obj.must and not filter_obj.should and not filter_obj.must_not
+        ):
             return "1=1"
 
         parts = []
@@ -112,13 +125,14 @@ class BaseQuery:
     def build(self):
         pass
 
+
 class SearchQuery(BaseQuery):
     def __init__(self, table: str, text: str | None = None):
         super().__init__(table)
         self.text = text
 
     def build(self) -> tuple[str, list[Any]]:
-        self.params.clear() 
+        self.params.clear()
         where_parts: list[str] = []
 
         text = self.text
@@ -139,10 +153,11 @@ class SearchQuery(BaseQuery):
             sql += " LIMIT ?"
             self.params.append(self._limit)
         if self._offset != None:
-            sql += " OFFSET ?"    
+            sql += " OFFSET ?"
             self.params.append(self._offset)
 
         return sql, self.params.copy()
+
 
 class UpdateQuery(BaseQuery):
     def __init__(self, table: str, values: dict):
@@ -166,6 +181,7 @@ class UpdateQuery(BaseQuery):
 
         return sql, self.params.copy()
 
+
 class DeleteQuery(BaseQuery):
     def __init__(self, table: str):
         super().__init__(table)
@@ -177,6 +193,7 @@ class DeleteQuery(BaseQuery):
         sql = f"DELETE FROM {self.table} WHERE {where_sql}"
 
         return sql, self.params.copy()
+
 
 class InsertQuery(BaseQuery):
     def __init__(self, table: str, rows: Union[dict[str, Any], list[dict[str, Any]]]):
@@ -202,7 +219,9 @@ class InsertQuery(BaseQuery):
         placeholders = "(" + ", ".join("?" for _ in self.columns) + ")"
         values_sql = ", ".join([placeholders] * len(self.rows))
 
-        sql = f"INSERT INTO {self.table} ({', '.join(self.columns)}) VALUES {values_sql}"
+        sql = (
+            f"INSERT INTO {self.table} ({', '.join(self.columns)}) VALUES {values_sql}"
+        )
 
         params = []
         for row in self.rows:
