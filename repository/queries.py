@@ -1,12 +1,24 @@
 from typing import Any, Union
 from abc import abstractmethod
 
-from search.filters import Filter, FieldEquals, FieldGreater, FieldLike, FieldIn, RawCondition, FieldBetween, FieldNotNull, FieldIsNull
+from search.filters import (
+    Condition,
+    Filter,
+    FieldEquals,
+    FieldGreater,
+    FieldLike,
+    FieldIn,
+    RawCondition,
+    FieldBetween,
+    FieldNotNull,
+    FieldIsNull,
+)
+
 
 class BaseQuery:
     def __init__(self, table: str):
         self.table = table
-        self.filters: Filter | None = None
+        self.filters: Condition | None = None
         self._order_by: str | None = None
         self._limit: int | None = None
         self._offset: int | None = None
@@ -20,7 +32,7 @@ class BaseQuery:
         q._offset = self._offset
         return q
 
-    def filter(self, filter_obj: Filter):
+    def filter(self, filter_obj: Condition):
         if self.filters is None:
             self.filters = filter_obj
         else:
@@ -38,8 +50,8 @@ class BaseQuery:
     def offset(self, n: int):
         self._offset = n
         return self
-    
-    def compile(self, condition) -> str:
+
+    def compile(self, condition: Condition | None) -> str:
         if condition is None:
             return "1=1"
 
@@ -80,7 +92,7 @@ class BaseQuery:
             return self.compile_filter(condition)
 
         raise ValueError("Unknown condition type: %r" % (type(condition),))
-    
+
     def compile_group(self, conditions: list, joiner: str) -> str:
         if not conditions:
             return ""
@@ -92,7 +104,9 @@ class BaseQuery:
         return f" {joiner} ".join(parts)
 
     def compile_filter(self, filter_obj: Filter) -> str:
-        if not filter_obj or (not filter_obj.must and not filter_obj.should and not filter_obj.must_not):
+        if not filter_obj or (
+            not filter_obj.must and not filter_obj.should and not filter_obj.must_not
+        ):
             return "1=1"
 
         parts = []
@@ -109,8 +123,9 @@ class BaseQuery:
         return " AND ".join(p for p in parts if p)
 
     @abstractmethod
-    def build(self):
+    def build(self) -> tuple[str, list[Any]]:
         pass
+
 
 class SearchQuery(BaseQuery):
     def __init__(self, table: str, text: str | None = None):
@@ -118,7 +133,7 @@ class SearchQuery(BaseQuery):
         self.text = text
 
     def build(self) -> tuple[str, list[Any]]:
-        self.params.clear() 
+        self.params.clear()
         where_parts: list[str] = []
 
         text = self.text
@@ -135,21 +150,22 @@ class SearchQuery(BaseQuery):
         if self._order_by:
             sql += f" ORDER BY {self._order_by}"
 
-        if self._limit != None:
+        if self._limit is not None:
             sql += " LIMIT ?"
             self.params.append(self._limit)
-        if self._offset != None:
-            sql += " OFFSET ?"    
+        if self._offset is not None:
+            sql += " OFFSET ?"
             self.params.append(self._offset)
 
         return sql, self.params.copy()
+
 
 class UpdateQuery(BaseQuery):
     def __init__(self, table: str, values: dict):
         super().__init__(table)
         self.values = values
 
-    def build(self):
+    def build(self) -> tuple[str, list[Any]]:
         self.params.clear()
         if not self.values:
             raise ValueError("UpdateQuery.values is empty")
@@ -166,17 +182,19 @@ class UpdateQuery(BaseQuery):
 
         return sql, self.params.copy()
 
+
 class DeleteQuery(BaseQuery):
     def __init__(self, table: str):
         super().__init__(table)
 
-    def build(self):
+    def build(self) -> tuple[str, list[Any]]:
         self.params.clear()
         where_sql = self.compile(self.filters) if self.filters else "1=1"
 
         sql = f"DELETE FROM {self.table} WHERE {where_sql}"
 
         return sql, self.params.copy()
+
 
 class InsertQuery(BaseQuery):
     def __init__(self, table: str, rows: Union[dict[str, Any], list[dict[str, Any]]]):
@@ -195,14 +213,16 @@ class InsertQuery(BaseQuery):
                 raise ValueError("All rows must have the same columns")
         self.columns = list(self.rows[0].keys())
 
-    def build(self):
+    def build(self) -> tuple[str, list[Any]]:
         if not self.rows:
             raise ValueError("InsertQuery.rows is empty")
 
         placeholders = "(" + ", ".join("?" for _ in self.columns) + ")"
         values_sql = ", ".join([placeholders] * len(self.rows))
 
-        sql = f"INSERT INTO {self.table} ({', '.join(self.columns)}) VALUES {values_sql}"
+        sql = (
+            f"INSERT INTO {self.table} ({', '.join(self.columns)}) VALUES {values_sql}"
+        )
 
         params = []
         for row in self.rows:
