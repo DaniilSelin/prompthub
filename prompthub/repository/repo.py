@@ -1,13 +1,13 @@
 import sqlite3
 
-from core.domain.operations import (
+from prompthub.core.domain.operations import (
     InsertOperation,
     DeleteOperation,
     ReplaceOperation,
     Operation,
 )
-from repository import Fields, _INIT_SCHEMA_SQL, SNAPSHOT_INTERVAL, TAG_MODEL_TYPE
-from repository.queries import BaseQuery, SearchQuery
+from prompthub.repository import Fields, _INIT_SCHEMA_SQL, SNAPSHOT_INTERVAL, TAG_MODEL_TYPE
+from prompthub.repository.queries import BaseQuery, SearchQuery
 
 
 class PromptRepo:

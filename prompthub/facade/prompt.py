@@ -1,13 +1,13 @@
-from repository import Fields
-from repository import SNAPSHOT_INTERVAL
-from repository.queries import BaseQuery
-from repository.query_factory import QueryFactory
-from core.domain.operations import (
+from prompthub.repository import Fields
+from prompthub.repository import SNAPSHOT_INTERVAL
+from prompthub.repository.queries import BaseQuery
+from prompthub.repository.query_factory import QueryFactory
+from prompthub.core.domain.operations import (
     InsertOperation,
     DeleteOperation,
     ReplaceOperation,
 )
-from core.domain.diff import DiffChunk, VersionDiff, VersionLineDiff
+from prompthub.core.domain.diff import DiffChunk, VersionDiff, VersionLineDiff
 
 import difflib
 

@@ -2,7 +2,7 @@ import json
 import urllib.request
 import urllib.error
 
-from core.domain.model_tariff import ModelTariff
+from prompthub.core.domain.model_tariff import ModelTariff
 
 # Формат ответа: {"data": [{"id": "model-id", "pricing": {"prompt": "0.0001", "completion": "0.0002"}}, ...]}
 DEFAULT_PRICING_URL = "https://openrouter.ai/api/v1/models"

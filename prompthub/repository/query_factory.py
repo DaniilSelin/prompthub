@@ -1,4 +1,4 @@
-from repository.queries import SearchQuery, InsertQuery, UpdateQuery, DeleteQuery
+from prompthub.repository.queries import SearchQuery, InsertQuery, UpdateQuery, DeleteQuery
 
 
 class QueryFactory:

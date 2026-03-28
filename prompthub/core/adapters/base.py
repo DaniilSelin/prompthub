@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from core.domain.prompt_messages import PromptMessages
+from prompthub.core.domain.prompt_messages import PromptMessages
 
 
 class LLMAdapter(ABC):

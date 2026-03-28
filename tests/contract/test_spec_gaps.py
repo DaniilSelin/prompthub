@@ -2,7 +2,7 @@ import sqlite3
 
 import pytest
 
-from facade.storage import Storage
+from prompthub.facade.storage import Storage
 
 
 def _create_prompt_with_versions(

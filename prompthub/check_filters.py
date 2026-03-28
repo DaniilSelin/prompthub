@@ -1,5 +1,5 @@
-from search.filters import Filter, FieldEquals, FieldGreater, FieldLike
-from repository.queries import SearchQuery
+from prompthub.search.filters import Filter, FieldEquals, FieldGreater, FieldLike
+from prompthub.repository.queries import SearchQuery
 
 A = FieldEquals("a", 1)
 B = FieldEquals("b", 2)

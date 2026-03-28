@@ -1,10 +1,10 @@
 import sqlite3
 import random
 
-from facade.storage import Storage
-from repository.repo import PromptRepo
-from repository import Fields, TAG_MODEL_TYPE, TAG_PROMPT_TYPE, _INIT_SCHEMA_SQL
-from search.filters import FieldEquals, FieldGreater
+from prompthub.facade.storage import Storage
+from prompthub.repository.repo import PromptRepo
+from prompthub.repository import Fields, TAG_MODEL_TYPE, TAG_PROMPT_TYPE, _INIT_SCHEMA_SQL
+from prompthub.search.filters import FieldEquals, FieldGreater
 
 random.seed(29) # сгенеренный тест переписывать мне лень, просто зафиксирую удачный сид
 

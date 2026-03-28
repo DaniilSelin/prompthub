@@ -1,5 +1,5 @@
-from core.adapters.base import LLMAdapter
-from core.domain.prompt_messages import PromptMessages
+from prompthub.core.adapters.base import LLMAdapter
+from prompthub.core.domain.prompt_messages import PromptMessages
 
 
 class OpenAIAdapter(LLMAdapter):

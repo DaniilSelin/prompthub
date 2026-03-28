@@ -1,5 +1,5 @@
-from core.adapters.base import LLMAdapter
-from core.adapters.openai import OpenAIAdapter
+from prompthub.core.adapters.base import LLMAdapter
+from prompthub.core.adapters.openai import OpenAIAdapter
 
 _REGISTRY: dict[str, type[LLMAdapter]] = {
     "openai": OpenAIAdapter,

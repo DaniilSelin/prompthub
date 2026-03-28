@@ -1,6 +1,6 @@
 import pytest
 
-from facade.storage import Storage
+from prompthub.facade.storage import Storage
 
 
 @pytest.mark.integration

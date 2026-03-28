@@ -1,5 +1,5 @@
 import sqlite3
-from core.domain.model_tariff import ModelTariff
+from prompthub.core.domain.model_tariff import ModelTariff
 
 
 class TariffManager:

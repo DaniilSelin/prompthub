@@ -1,7 +1,7 @@
 from typing import Any, Union
 from abc import abstractmethod
 
-from search.filters import (
+from prompthub.search.filters import (
     Filter,
     FieldEquals,
     FieldGreater,

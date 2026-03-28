@@ -1,7 +1,7 @@
 import pytest
 
-from core.domain.operations import DeleteOperation, InsertOperation, ReplaceOperation
-from facade.prompt import Prompt
+from prompthub.core.domain.operations import DeleteOperation, InsertOperation, ReplaceOperation
+from prompthub.facade.prompt import Prompt
 
 
 @pytest.mark.unit

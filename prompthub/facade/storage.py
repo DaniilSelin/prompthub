@@ -1,9 +1,9 @@
-from facade.prompt import Prompt
-from facade.prompt_group import PromptGroup
-from repository.repo import PromptRepo
-from repository import Fields
-from repository.query_factory import QueryFactory
-from repository.queries import BaseQuery
+from prompthub.facade.prompt import Prompt
+from prompthub.facade.prompt_group import PromptGroup
+from prompthub.repository.repo import PromptRepo
+from prompthub.repository import Fields
+from prompthub.repository.query_factory import QueryFactory
+from prompthub.repository.queries import BaseQuery
 
 from pathlib import Path
 import sqlite3

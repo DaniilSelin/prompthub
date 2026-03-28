@@ -1,7 +1,7 @@
 import pytest
 
-from repository.queries import SearchQuery
-from search.filters import (
+from prompthub.repository.queries import SearchQuery
+from prompthub.search.filters import (
     FieldBetween,
     FieldEquals,
     FieldGreater,

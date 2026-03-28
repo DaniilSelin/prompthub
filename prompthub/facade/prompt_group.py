@@ -1,13 +1,13 @@
-from repository.queries import (
+from prompthub.repository.queries import (
     BaseQuery,
     SearchQuery,
     InsertQuery,
     DeleteQuery,
     UpdateQuery,
 )
-from repository import Fields, TAG_PROMPT_TYPE, SNAPSHOT_INTERVAL
-from search.filters import RawCondition, Filter
-from core.domain.tag import PromptTag
+from prompthub.repository import Fields, TAG_PROMPT_TYPE, SNAPSHOT_INTERVAL
+from prompthub.search.filters import RawCondition, Filter
+from prompthub.core.domain.tag import PromptTag
 
 
 class PromptGroup:

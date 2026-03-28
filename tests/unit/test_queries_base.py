@@ -1,7 +1,7 @@
 import pytest
 
-from repository.queries import DeleteQuery, InsertQuery, SearchQuery, UpdateQuery
-from search.filters import FieldEquals, FieldGreater, FieldIn
+from prompthub.repository.queries import DeleteQuery, InsertQuery, SearchQuery, UpdateQuery
+from prompthub.search.filters import FieldEquals, FieldGreater, FieldIn
 
 
 @pytest.mark.unit
