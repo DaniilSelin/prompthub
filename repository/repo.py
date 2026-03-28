@@ -114,13 +114,6 @@ class PromptRepo:
         """, (prompt_id,))
         return cur.fetchall()
 
-    def delete_version(self, version_id: int):
-        cur = self.conn.cursor()
-        cur.execute("""
-            DELETE FROM prompt_versions WHERE id = ?
-        """, (version_id,))
-        self.conn.commit()
-
     def insert_version(
         self,
         prompt_id: int,
