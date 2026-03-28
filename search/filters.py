@@ -85,6 +85,33 @@ class RawCondition(Condition):
     def __repr__(self):
         return f"Raw({self.sql})"
 
+
+class TagFilter(RawCondition):
+    """Фильтр промптов по тегу. Используется в search_by_tags()."""
+    def __init__(self, name: str, tag_type: str | None = None):
+        if tag_type:
+            sql = (
+                "id IN ("
+                "SELECT pt.prompt_id FROM prompt_tags pt "
+                "JOIN tags t ON t.id = pt.tag_id "
+                "WHERE t.name = ? AND t.type = ?"
+                ")"
+            )
+            params = [name, tag_type]
+        else:
+            sql = (
+                "id IN ("
+                "SELECT pt.prompt_id FROM prompt_tags pt "
+                "JOIN tags t ON t.id = pt.tag_id "
+                "WHERE t.name = ?"
+                ")"
+            )
+            params = [name]
+        super().__init__(sql, params)
+
+    def __repr__(self):
+        return f"TagFilter(sql={self.sql!r})"
+
 """
 Сплющивание всё таки приводило к серьёзным ошибкам. Вернул логику вложенных фильтров.
 """

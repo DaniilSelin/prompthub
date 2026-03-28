@@ -104,4 +104,8 @@ ON {Fields._PROMPT_VERSIONS_TABLE}({Fields.PROMPT_VERSIONS_PROMPT_ID}, {Fields.P
 CREATE INDEX idx_pv_snapshot
 ON {Fields._PROMPT_VERSIONS_TABLE}({Fields.PROMPT_VERSIONS_PROMPT_ID}, seq DESC)
 WHERE snapshot_content IS NOT NULL;
+
+CREATE TABLE model_tariffs (
+    tag_name TEXT NOT NULL PRIMARY KEY
+);
 """
