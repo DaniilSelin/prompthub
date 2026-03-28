@@ -47,6 +47,10 @@ class Storage(QueryFactory):
     def make_group_prompt(self) -> PromptGroup:
         return PromptGroup(self.repo)
 
+    def list_all_tags(self) -> list[dict]:
+        rows = self.repo.fetch_all_tags()
+        return [{"name": r["name"], "type": r["type"]} for r in rows]
+
     def register_tariff(self, tag_name: str):
         self.repo.register_tariff(tag_name)
 

@@ -215,6 +215,15 @@ class PromptRepo:
         """, (prompt_id,))
         return cur.fetchall()
 
+    def fetch_all_tags(self) -> list:
+        cur = self.conn.cursor()
+        cur.execute(f"""
+            SELECT {Fields.TAG_NAME}, {Fields.TAG_TYPE}
+            FROM {Fields._TAG_TABLE}
+            ORDER BY {Fields.TAG_TYPE}, {Fields.TAG_NAME}
+        """)
+        return cur.fetchall()
+
     def register_tariff(self, tag_name: str):
         cur = self.conn.cursor()
         cur.execute("""
