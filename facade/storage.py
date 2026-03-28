@@ -30,6 +30,41 @@ class Storage(QueryFactory):
         prompt_id = self.repo.create_prompt(name, author)
         return Prompt(prompt_id, self.repo)
 
+    def fetch_prompt(
+        self,
+        name: str,
+        version: str | None = None,
+        adapter_type: str | None = None,
+    ):
+        from core.domain.prompt_messages import PromptMessages
+        from core.adapters.registry import get_adapter
+
+        row = self.repo.get_prompt_by_name(name)
+        if not row:
+            raise KeyError(f"Промпт '{name}' не найден")
+
+        prompt = Prompt(row["id"], self.repo)
+
+        if version is not None:
+            v = self.repo.get_version_by_name(row["id"], version)
+            if v is None:
+                raise ValueError(f"Версия '{version}' не найдена")
+            version_name = v["name"]
+        else:
+            latest = self.repo.get_latest_version(row["id"])
+            if latest is None:
+                raise ValueError(f"Промпт '{name}' не имеет версий")
+            version_name = latest["name"]
+
+        content = prompt.get_version_content(version_name)
+        messages = PromptMessages(name=name, version=version_name, content=content)
+
+        if adapter_type is None:
+            return messages
+
+        adapter = get_adapter(adapter_type)
+        return adapter.convert(messages)
+
     def get_prompt(self, name: str) -> Prompt:
         row = self.repo.get_prompt_by_name(name)
         if not row:
