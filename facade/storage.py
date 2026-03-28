@@ -92,6 +92,42 @@ class Storage(QueryFactory):
         rows = self.repo.execute_tag_filter_query(filters)
         return [self.repo.fetch_metadata(r["id"]) for r in rows]
 
+    def list_prompts(self) -> list[dict]:
+        import warnings
+        rows = self.repo.fetch_all_prompts()
+        if not rows:
+            return []
+
+        result = []
+        for row in rows:
+            prompt_id = row["id"]
+            metadata = self.repo.fetch_metadata(prompt_id)
+
+            latest = self.repo.get_latest_version(prompt_id)
+            if latest is None:
+                token_count = 0
+            else:
+                prompt = Prompt(prompt_id, self.repo)
+                content = prompt.get_version_content(latest["name"])
+                token_count = len(content.split())
+
+            entry = {**metadata, "token_count": token_count, "costs": {}}
+
+            model_tags = metadata["model_tags"]
+            if model_tags:
+                tariffs = self.repo.fetch_tariffs(model_tags)
+                for tag in model_tags:
+                    if tag not in tariffs:
+                        warnings.warn(f"Тариф для модели '{tag}' не найден — стоимость не рассчитана")
+                        entry["costs"][tag] = None
+                    else:
+                        tariff = tariffs[tag]
+                        entry["costs"][tag] = round(token_count / 1000 * tariff["input_price_per_1k"], 6)
+
+            result.append(entry)
+
+        return result
+
     def list_all_tags(self) -> list[dict]:
         rows = self.repo.fetch_all_tags()
         return [{"name": r["name"], "type": r["type"]} for r in rows]

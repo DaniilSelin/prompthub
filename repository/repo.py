@@ -257,6 +257,23 @@ class PromptRepo:
             "model_tags": [r["name"] for r in tags if r["type"] == "model"],
         }
 
+    def fetch_all_prompts(self) -> list:
+        cur = self.conn.cursor()
+        cur.execute(f"SELECT id FROM {Fields._PROMPTS_TABLE} ORDER BY {Fields.PROMPT_NAME}")
+        return cur.fetchall()
+
+    def fetch_tariffs(self, tag_names: list[str]) -> dict:
+        if not tag_names:
+            return {}
+        placeholders = ",".join("?" * len(tag_names))
+        cur = self.conn.cursor()
+        cur.execute(
+            f"SELECT tag_name, input_price_per_1k, output_price_per_1k "
+            f"FROM model_tariffs WHERE tag_name IN ({placeholders})",
+            tag_names,
+        )
+        return {r["tag_name"]: r for r in cur.fetchall()}
+
     def fetch_all_tags(self) -> list:
         cur = self.conn.cursor()
         cur.execute(f"""
