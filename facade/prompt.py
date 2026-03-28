@@ -4,11 +4,13 @@ from repository.queries import BaseQuery
 from repository.query_factory import QueryFactory
 from core.domain.operations import (
     InsertOperation,
-    DeleteOperation, 
+    DeleteOperation,
     ReplaceOperation,
 )
+from core.domain.diff import DiffChunk, VersionDiff, VersionLineDiff
 
 import difflib
+
 
 class PromptVersion:
     def __init__(
@@ -39,6 +41,7 @@ class PromptVersion:
 
     def __repr__(self):
         return f"<PromptVersion {self.name} seq={self.seq} snapshot={self.is_snapshot}>"
+
 
 class Prompt(QueryFactory):
     table: str = Fields._PROMPT_VERSIONS_TABLE
@@ -131,7 +134,7 @@ class Prompt(QueryFactory):
         versions = self.list_versions()
         if not versions:
             raise ValueError("Нет версий для отката")
-        
+
         if name:
             target = next((v for v in versions if v.name == name), None)
             if not target:
@@ -146,12 +149,11 @@ class Prompt(QueryFactory):
             raise ValueError("Нужно указать name или steps_back")
 
         return self.add_version(
-            content = rollback_version_content,
-            name = name_rollback_version,
-            author = author,
-            message = "rollback to " + target.name,
+            content=rollback_version_content,
+            name=name_rollback_version,
+            author=author,
+            message="rollback to " + target.name,
         )
-        
 
     def get_version_content(self, name: str) -> str:
         v = self.repo.get_version_by_name(self.id, name)
@@ -183,10 +185,45 @@ class Prompt(QueryFactory):
 
         for v in versions:
             changes = self.repo.get_changes(v["id"])
-            for op in changes:
+            for op in reversed(changes):
                 content = op.apply(content)
 
         return content
+
+    def compare_versions(self, name_a: str, name_b: str) -> VersionLineDiff:
+        content_a = self.get_version_content(name_a)
+        content_b = self.get_version_content(name_b)
+
+        hunks = list(
+            difflib.unified_diff(
+                content_a.splitlines(keepends=True),
+                content_b.splitlines(keepends=True),
+                fromfile=name_a,
+                tofile=name_b,
+            )
+        )
+
+        return VersionLineDiff(name_a=name_a, name_b=name_b, hunks=hunks)
+
+    def compare_versions_chars(self, name_a: str, name_b: str) -> VersionDiff:
+        content_a = self.get_version_content(name_a)
+        content_b = self.get_version_content(name_b)
+
+        sm = difflib.SequenceMatcher(None, content_a, content_b)
+        chunks = [
+            DiffChunk(
+                tag=tag,
+                old_start=i1,
+                old_end=i2,
+                new_start=j1,
+                new_end=j2,
+                old_text=content_a[i1:i2],
+                new_text=content_b[j1:j2],
+            )
+            for tag, i1, i2, j1, j2 in sm.get_opcodes()
+        ]
+
+        return VersionDiff(name_a=name_a, name_b=name_b, chunks=chunks)
 
     def _build_changeset(self, old: str, new: str):
         ops = []
