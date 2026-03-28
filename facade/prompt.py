@@ -185,7 +185,7 @@ class Prompt(QueryFactory):
 
         for v in versions:
             changes = self.repo.get_changes(v["id"])
-            for op in changes:
+            for op in reversed(changes):
                 content = op.apply(content)
 
         return content
@@ -194,12 +194,14 @@ class Prompt(QueryFactory):
         content_a = self.get_version_content(name_a)
         content_b = self.get_version_content(name_b)
 
-        hunks = list(difflib.unified_diff(
-            content_a.splitlines(keepends=True),
-            content_b.splitlines(keepends=True),
-            fromfile=name_a,
-            tofile=name_b,
-        ))
+        hunks = list(
+            difflib.unified_diff(
+                content_a.splitlines(keepends=True),
+                content_b.splitlines(keepends=True),
+                fromfile=name_a,
+                tofile=name_b,
+            )
+        )
 
         return VersionLineDiff(name_a=name_a, name_b=name_b, hunks=hunks)
 
