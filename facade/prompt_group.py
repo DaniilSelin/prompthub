@@ -1,7 +1,11 @@
-from repository.queries import BaseQuery, SearchQuery, InsertQuery, DeleteQuery, UpdateQuery
-from repository import Fields, TAG_PROMPT_TYPE, SNAPSHOT_INTERVAL
+from typing import TypeVar
+
+from repository.queries import BaseQuery, SearchQuery, DeleteQuery, UpdateQuery
+from repository import Fields, TAG_PROMPT_TYPE
 from search.filters import RawCondition, Filter
-from core.domain.tag import PromptTag
+
+TQuery = TypeVar("TQuery", bound=BaseQuery)
+
 
 class PromptGroup:
     table: str = Fields._PROMPT_VERSIONS_TABLE
@@ -10,11 +14,11 @@ class PromptGroup:
         self.repo = repo
         self.prompt_query = prompt_query or SearchQuery(Fields._PROMPTS_TABLE)
 
-    def _compile_prompt_query(self):
+    def _compile_prompt_query(self) -> tuple[str, list[object]]:
         sql, params = self.prompt_query.build()
         return f"SELECT {Fields._PROMPT_ID} FROM ({sql}) AS sub", params
 
-    def _add_group_condition(self, query: BaseQuery) -> BaseQuery:
+    def _add_group_condition(self, query: TQuery) -> TQuery:
         sub_sql, sub_params = self._compile_prompt_query()
 
         cond = RawCondition(
