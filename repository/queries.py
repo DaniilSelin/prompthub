@@ -2,7 +2,6 @@ from typing import Any, Union
 from abc import abstractmethod
 
 from search.filters import (
-    Condition,
     Filter,
     FieldEquals,
     FieldGreater,
@@ -51,7 +50,7 @@ class BaseQuery:
         self._offset = n
         return self
 
-    def compile(self, condition: Condition | None) -> str:
+    def compile(self, condition) -> str:
         if condition is None:
             return "1=1"
 
@@ -153,7 +152,7 @@ class SearchQuery(BaseQuery):
         if self._limit is not None:
             sql += " LIMIT ?"
             self.params.append(self._limit)
-        if self._offset is not None:
+        if self._offset != None:
             sql += " OFFSET ?"
             self.params.append(self._offset)
 

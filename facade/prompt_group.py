@@ -1,10 +1,15 @@
-from typing import TypeVar
-
-from repository.queries import BaseQuery, SearchQuery, DeleteQuery, UpdateQuery
-from repository import Fields, TAG_PROMPT_TYPE
+from repository.queries import (
+    BaseQuery,
+    SearchQuery,
+    InsertQuery,
+    DeleteQuery,
+    UpdateQuery,
+)
+from repository import Fields, TAG_PROMPT_TYPE, SNAPSHOT_INTERVAL
 from search.filters import RawCondition, Filter
 
 TQuery = TypeVar("TQuery", bound=BaseQuery)
+
 
 
 class PromptGroup:

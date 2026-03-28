@@ -1,7 +1,7 @@
-
 class Operation:
     def apply(self, content: str) -> str:
         raise NotImplementedError
+
 
 class InsertOperation(Operation):
     def __init__(self, pos: int, text: str):
@@ -18,6 +18,7 @@ class InsertOperation(Operation):
     def __repr__(self) -> str:
         return f"Insert(pos={self.pos}, text={self.text!r})"
 
+
 class DeleteOperation(Operation):
     def __init__(self, start: int, end: int):
         self.start = start
@@ -32,6 +33,7 @@ class DeleteOperation(Operation):
 
     def __repr__(self) -> str:
         return f"Delete(start={self.start}, end={self.end})"
+
 
 class ReplaceOperation(Operation):
     def __init__(self, start: int, end: int, text: str):

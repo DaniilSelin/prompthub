@@ -1,5 +1,6 @@
 from repository.queries import SearchQuery, InsertQuery, UpdateQuery, DeleteQuery
 
+
 class QueryFactory:
     table: str = "table"
 
