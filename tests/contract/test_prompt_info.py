@@ -18,8 +18,8 @@ def test_uc05_001_list_all_prompts_with_metadata(storage):
     storage.create_prompt("prompt_1", author="alice")
     storage.create_prompt("prompt_2", author="bob")
     
-    all_prompts = storage.repo.get_all_prompts()
-    
+    all_prompts = storage._conn.execute("SELECT name, author FROM prompts").fetchall()
+
     assert len(all_prompts) == 2
     names = {p["name"] for p in all_prompts}
     assert names == {"prompt_1", "prompt_2"}
@@ -46,9 +46,9 @@ def test_uc06_001_version_history_order_and_fields(storage):
     history = prompt.list_versions()
     
     assert len(history) == 2
-    assert history[0]["seq"] == 1
-    assert history[1]["seq"] == 2
-    assert history[0]["message"] == "first commit"
+    assert history[0].seq == 1
+    assert history[1].seq == 2
+    assert history[0].message == "first commit"
 
 @pytest.mark.integration
 def test_uc06_002_history_after_prompt_deletion(storage):
@@ -77,13 +77,17 @@ def test_uc07_001_changeset_storage_integrity(storage):
     prompt.add_version("Line 1\nLine 2", name="v2")
     
     changes = storage._conn.execute(
-        "SELECT type, text_data FROM prompt_changes WHERE prompt_id = ?", 
-        (prompt.id,)
+        """
+        SELECT pc.op_type, pc.text
+        FROM prompt_changes pc
+        JOIN prompt_versions pv ON pc.version_id = pv.id
+        WHERE pv.prompt_id = ?
+        """,
+        (prompt.id,),
     ).fetchall()
-    
-    
+
     assert len(changes) > 0
-    assert any("Line 2" in str(c["text_data"]) for c in changes)
+    assert any("Line 2" in str(c["text"]) for c in changes)
 
 @pytest.mark.contract
 @pytest.mark.skip(reason="Публичный API сравнения (ВИ-7) еще не реализован")

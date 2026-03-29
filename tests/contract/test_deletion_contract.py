@@ -53,8 +53,8 @@ def test_uc13_003_global_tags_persistence_contract(storage):
     p1 = storage.create_prompt("prompt_1")
     p2 = storage.create_prompt("prompt_2")
     
-    p1.add_tag(tag_name, type="category")
-    p2.add_tag(tag_name, type="category")
+    p1.add_tag(tag_name, "prompt")
+    p2.add_tag(tag_name, "prompt")
     
     storage.repo.delete_prompt(p1.id)
     
