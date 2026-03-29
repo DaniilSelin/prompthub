@@ -118,7 +118,7 @@ class Prompt(QueryFactory):
         else:
             raise ValueError("Нужно указать name или steps_back")
 
-        for v in versions:
+        for v in reversed(versions):
             if v.seq > target.seq:
                 self.repo.delete_version(v.id)
 

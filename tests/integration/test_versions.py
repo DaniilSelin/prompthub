@@ -110,6 +110,73 @@ def test_uc16_002_reconstructs_content_from_snapshot_and_delta_chain(tmp_path):
 
 
 @pytest.mark.integration
+def test_uc08_004_rollback_hard_by_name_removes_later_versions(tmp_path):
+    """TC-UC08-004: rollback_hard по имени удаляет версии после целевой."""
+    db_path = tmp_path / "uc08_hard_by_name.sqlite3"
+
+    storage = Storage(str(db_path))
+    try:
+        prompt = _create_prompt_with_versions(
+            storage,
+            prompt_name="hard_rollback_prompt",
+            contents=["v1 content", "v2 content", "v3 content", "v4 content"],
+        )
+
+        assert len(prompt.list_versions()) == 4
+
+        prompt.rollback_hard(name="v2")
+
+        versions = prompt.list_versions()
+        assert len(versions) == 2
+        assert [v.name for v in versions] == ["v1", "v2"]
+        assert prompt.get_version_content("v2") == "v2 content"
+    finally:
+        storage._conn.close()
+
+
+@pytest.mark.integration
+def test_uc08_005_rollback_hard_by_steps_removes_later_versions(tmp_path):
+    """TC-UC08-005: rollback_hard по steps_back удаляет нужные версии."""
+    db_path = tmp_path / "uc08_hard_by_steps.sqlite3"
+
+    storage = Storage(str(db_path))
+    try:
+        prompt = _create_prompt_with_versions(
+            storage,
+            prompt_name="hard_rollback_steps_prompt",
+            contents=["first", "second", "third"],
+        )
+
+        prompt.rollback_hard(steps_back=1)
+
+        versions = prompt.list_versions()
+        assert len(versions) == 2
+        assert versions[-1].name == "v2"
+        assert prompt.get_version_content("v2") == "second"
+    finally:
+        storage._conn.close()
+
+
+@pytest.mark.integration
+def test_uc08_006_rollback_hard_raises_for_unknown_name(tmp_path):
+    """TC-UC08-006: rollback_hard выбрасывает ValueError для несуществующего имени версии."""
+    db_path = tmp_path / "uc08_hard_unknown.sqlite3"
+
+    storage = Storage(str(db_path))
+    try:
+        prompt = _create_prompt_with_versions(
+            storage,
+            prompt_name="hard_rollback_error_prompt",
+            contents=["only"],
+        )
+
+        with pytest.raises(ValueError):
+            prompt.rollback_hard(name="v999")
+    finally:
+        storage._conn.close()
+
+
+@pytest.mark.integration
 def test_uc16_003_raises_error_for_unknown_version_name(tmp_path):
     db_path = tmp_path / "uc16_unknown_version.sqlite3"
 

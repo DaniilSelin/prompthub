@@ -82,7 +82,6 @@ def test_uc03_004_contract_update_with_identical_content_does_not_create_new_ver
 
 
 @pytest.mark.contract
-@pytest.mark.xfail(strict=True, reason="known rollback runtime defect")
 def test_uc08_001_rollback_by_version_name_creates_new_version_without_losing_history(
     tmp_path,
 ):
@@ -97,7 +96,7 @@ def test_uc08_001_rollback_by_version_name_creates_new_version_without_losing_hi
         )
 
         before = prompt.list_versions()
-        previous_latest_seq = before[-1]["seq"]
+        previous_latest_seq = before[-1].seq
 
         prompt.rollback(
             name="v1",
@@ -107,19 +106,18 @@ def test_uc08_001_rollback_by_version_name_creates_new_version_without_losing_hi
 
         after = prompt.list_versions()
         assert len(after) == len(before) + 1
-        assert after[-1]["seq"] == previous_latest_seq + 1
-        assert after[-1]["name"] == "rollback_to_v1"
+        assert after[-1].seq == previous_latest_seq + 1
+        assert after[-1].name == "rollback_to_v1"
 
         assert prompt.get_version_content(
             "rollback_to_v1"
         ) == prompt.get_version_content("v1")
-        assert [row["name"] for row in after[:-1]] == ["v1", "v2", "v3"]
+        assert [row.name for row in after[:-1]] == ["v1", "v2", "v3"]
     finally:
         storage._conn.close()
 
 
 @pytest.mark.contract
-@pytest.mark.xfail(strict=True, reason="known rollback runtime defect")
 def test_uc08_002_rollback_by_steps_creates_new_version_without_losing_history(
     tmp_path,
 ):
@@ -134,7 +132,7 @@ def test_uc08_002_rollback_by_steps_creates_new_version_without_losing_history(
         )
 
         before = prompt.list_versions()
-        previous_latest_seq = before[-1]["seq"]
+        previous_latest_seq = before[-1].seq
 
         prompt.rollback(
             steps_back=2,
@@ -144,13 +142,13 @@ def test_uc08_002_rollback_by_steps_creates_new_version_without_losing_history(
 
         after = prompt.list_versions()
         assert len(after) == len(before) + 1
-        assert after[-1]["seq"] == previous_latest_seq + 1
-        assert after[-1]["name"] == "rollback_steps_2"
+        assert after[-1].seq == previous_latest_seq + 1
+        assert after[-1].name == "rollback_steps_2"
 
         assert prompt.get_version_content(
             "rollback_steps_2"
         ) == prompt.get_version_content("v2")
-        assert [row["name"] for row in after[:-1]] == ["v1", "v2", "v3", "v4"]
+        assert [row.name for row in after[:-1]] == ["v1", "v2", "v3", "v4"]
     finally:
         storage._conn.close()
 
