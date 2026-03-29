@@ -1,7 +1,8 @@
 TAG_MODEL_TYPE, TAG_PROMPT_TYPE = "model", "prompt"
 SNAPSHOT_INTERVAL = 5
 
-class Fields():
+
+class Fields:
     _PROMPTS_TABLE = "prompts"
     _PROMPT_VERSIONS_TABLE = "prompt_versions"
     _TAG_TABLE = "tags"
@@ -23,8 +24,9 @@ class Fields():
     TAG_NAME = "name"
     TAG_TYPE = "type"
 
+
 _INIT_SCHEMA_SQL = f"""
-CREATE TABLE {Fields._PROMPTS_TABLE} (
+CREATE TABLE IF NOT EXISTS {Fields._PROMPTS_TABLE} (
     {Fields._PROMPT_ID} INTEGER PRIMARY KEY AUTOINCREMENT,
     {Fields.PROMPT_NAME} TEXT NOT NULL,
     {Fields.PROMPT_AUTHOR} TEXT NULL,
@@ -32,7 +34,7 @@ CREATE TABLE {Fields._PROMPTS_TABLE} (
     {Fields.PROMPT_CREATED_AT} TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE {Fields._PROMPT_VERSIONS_TABLE} (
+CREATE TABLE IF NOT EXISTS {Fields._PROMPT_VERSIONS_TABLE} (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     {Fields.PROMPT_VERSIONS_PROMPT_ID} INTEGER NOT NULL,
 
@@ -53,7 +55,7 @@ CREATE TABLE {Fields._PROMPT_VERSIONS_TABLE} (
     UNIQUE({Fields.PROMPT_VERSIONS_PROMPT_ID}, seq)
 );
 
-CREATE TABLE prompt_changes (
+CREATE TABLE IF NOT EXISTS prompt_changes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     version_id INTEGER NOT NULL,
 
@@ -75,14 +77,14 @@ CREATE TABLE prompt_changes (
     UNIQUE(version_id, op_index)
 );
 
-CREATE TABLE {Fields._TAG_TABLE} (
+CREATE TABLE IF NOT EXISTS {Fields._TAG_TABLE} (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     {Fields.TAG_NAME} TEXT NOT NULL,
     {Fields.TAG_TYPE} TEXT NOT NULL CHECK({Fields.TAG_TYPE} IN ('{TAG_MODEL_TYPE}', '{TAG_PROMPT_TYPE}')),
     UNIQUE({Fields.TAG_NAME}, {Fields.TAG_TYPE})
 );
 
-CREATE TABLE prompt_tags (
+CREATE TABLE IF NOT EXISTS prompt_tags (
     prompt_id INTEGER NOT NULL,
     tag_id INTEGER NOT NULL,
 
@@ -92,20 +94,20 @@ CREATE TABLE prompt_tags (
     FOREIGN KEY(tag_id) REFERENCES {Fields._TAG_TABLE}(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_prompt_tags_prompt ON prompt_tags(prompt_id);
-CREATE INDEX idx_prompt_tags_tag ON prompt_tags(tag_id);
+CREATE INDEX IF NOT EXISTS idx_prompt_tags_prompt ON prompt_tags(prompt_id);
+CREATE INDEX IF NOT EXISTS idx_prompt_tags_tag ON prompt_tags(tag_id);
 
-CREATE INDEX idx_pv_prompt_seq
+CREATE INDEX IF NOT EXISTS idx_pv_prompt_seq
 ON {Fields._PROMPT_VERSIONS_TABLE}({Fields.PROMPT_VERSIONS_PROMPT_ID}, seq);
 
-CREATE INDEX idx_pv_prompt_name
+CREATE INDEX IF NOT EXISTS idx_pv_prompt_name
 ON {Fields._PROMPT_VERSIONS_TABLE}({Fields.PROMPT_VERSIONS_PROMPT_ID}, {Fields.PROMPT_VERSIONS_NAME});
 
-CREATE INDEX idx_pv_snapshot
+CREATE INDEX IF NOT EXISTS idx_pv_snapshot
 ON {Fields._PROMPT_VERSIONS_TABLE}({Fields.PROMPT_VERSIONS_PROMPT_ID}, seq DESC)
 WHERE snapshot_content IS NOT NULL;
 
-CREATE TABLE model_tariffs (
+CREATE TABLE IF NOT EXISTS model_tariffs (
     tag_name TEXT NOT NULL PRIMARY KEY,
     input_price_per_1k REAL DEFAULT 0.0,
     output_price_per_1k REAL DEFAULT 0.0,

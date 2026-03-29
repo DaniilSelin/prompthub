@@ -81,7 +81,7 @@ def test_uc01_002_reinitialization_preserves_existing_data(tmp_path):
 
         versions = restored_prompt.list_versions()
         assert len(versions) == 1
-        assert versions[0]["seq"] == 1
+        assert versions[0].seq == 1
     finally:
         reinitialized_storage._conn.close()
 
@@ -93,7 +93,7 @@ def test_uc01_003_raises_error_when_db_path_is_unavailable(monkeypatch, tmp_path
     def failing_connect(*args, **kwargs):
         raise sqlite3.OperationalError("unable to open database file")
 
-    monkeypatch.setattr("facade.storage.sqlite3.connect", failing_connect)
+    monkeypatch.setattr("prompthub.facade.storage.sqlite3.connect", failing_connect)
 
     with pytest.raises(sqlite3.OperationalError, match="unable to open database file"):
         Storage(str(db_path))

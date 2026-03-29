@@ -39,7 +39,7 @@ def test_uc08_003_rollback_with_invalid_steps_back_raises_value_error(tmp_path):
 
         versions_after = prompt.list_versions()
         assert len(versions_after) == 2
-        assert [row["name"] for row in versions_after] == ["v1", "v2"]
+        assert [row.name for row in versions_after] == ["v1", "v2"]
     finally:
         storage._conn.close()
 
@@ -57,7 +57,7 @@ def test_uc16_001_returns_latest_version_content(tmp_path):
             contents=expected_contents,
         )
 
-        latest_version_name = prompt.list_versions()[-1]["name"]
+        latest_version_name = prompt.list_versions()[-1].name
         latest_content = prompt.get_version_content(latest_version_name)
 
         assert latest_version_name == "v3"

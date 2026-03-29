@@ -21,9 +21,9 @@ def test_uc02_001_creates_prompt_and_first_version(tmp_path):
 
         versions = prompt.list_versions()
         assert len(versions) == 1
-        assert versions[0]["seq"] == 1
-        assert versions[0]["name"] == "v1"
-        assert versions[0]["snapshot_content"] == "System: welcome user"
+        assert versions[0].seq == 1
+        assert versions[0].name == "v1"
+        assert versions[0].snapshot_content == "System: welcome user"
     finally:
         storage._conn.close()
 
@@ -92,8 +92,8 @@ def test_uc03_001_adds_new_version_increments_seq_and_sets_parent(tmp_path):
 
         versions = prompt.list_versions()
         assert len(versions) == 2
-        assert versions[0]["seq"] == 1
-        assert versions[1]["seq"] == 2
+        assert versions[0].seq == 1
+        assert versions[1].seq == 2
 
         second_row = storage._conn.execute(
             """
