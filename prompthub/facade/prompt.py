@@ -10,6 +10,9 @@ from prompthub.core.domain.operations import (
 from prompthub.core.domain.diff import DiffChunk, VersionDiff, VersionLineDiff
 
 import difflib
+import json
+
+Messages = list[tuple[str, str]]
 
 
 class PromptVersion:
@@ -60,13 +63,39 @@ class Prompt(QueryFactory):
     def execute(self, query: BaseQuery):
         return self.repo.execute(query)
 
+    @staticmethod
+    def _validate_messages(messages: Messages):
+        if not isinstance(messages, list) or not messages:
+            raise ValueError("content должен быть непустым списком сообщений")
+        for msg in messages:
+            if (
+                not isinstance(msg, (tuple, list))
+                or len(msg) != 2
+                or not isinstance(msg[0], str)
+                or not isinstance(msg[1], str)
+            ):
+                raise ValueError(
+                    "Каждое сообщение должно быть кортежем (role, content)"
+                )
+
+    @staticmethod
+    def _serialize(messages: Messages) -> str:
+        return json.dumps([list(m) for m in messages], ensure_ascii=False)
+
+    @staticmethod
+    def _deserialize(text: str) -> Messages:
+        return [tuple(item) for item in json.loads(text)]
+
     def add_version(
         self,
-        content: str,
+        content: Messages,
         name: str,
         author: str | None = None,
         message: str | None = None,
     ):
+        self._validate_messages(content)
+        serialized = self._serialize(content)
+
         latest = self.repo.get_latest_version(self.id)
 
         if latest is None:
@@ -75,21 +104,21 @@ class Prompt(QueryFactory):
                 name=name,
                 seq=1,
                 parent_id=None,
-                snapshot_content=content,
+                snapshot_content=serialized,
                 author=author,
                 message=message,
                 changes=[],
             )
 
-        prev_content = self.get_version_content(latest[Fields.PROMPT_VERSIONS_NAME])
+        prev_raw = self._assemble(latest["seq"])
 
-        if prev_content == content:
-            raise ValueError("Новая версия не отличается от предыдущей")
+        if prev_raw == serialized:
+            return latest["id"]
 
-        changes = self._build_changeset(prev_content, content)
+        changes = self._build_changeset(prev_raw, serialized)
         new_seq = latest["seq"] + 1
 
-        snapshot = content if new_seq % self.snapshot_interval == 0 else None
+        snapshot = serialized if new_seq % self.snapshot_interval == 0 else None
 
         return self.repo.insert_version(
             prompt_id=self.id,
@@ -155,12 +184,14 @@ class Prompt(QueryFactory):
             message="rollback to " + target.name,
         )
 
-    def get_version_content(self, name: str) -> str:
+    def _get_raw_content(self, name: str) -> str:
         v = self.repo.get_version_by_name(self.id, name)
         if not v:
             raise ValueError("version not found")
-
         return self._assemble(v["seq"])
+
+    def get_version_content(self, name: str) -> Messages:
+        return self._deserialize(self._get_raw_content(name))
 
     def list_versions(self) -> list["PromptVersion"]:
         rows = self.repo.list_versions(self.id)
@@ -209,13 +240,13 @@ class Prompt(QueryFactory):
         return content
 
     def compare_versions(self, name_a: str, name_b: str) -> VersionLineDiff:
-        content_a = self.get_version_content(name_a)
-        content_b = self.get_version_content(name_b)
+        raw_a = self._get_raw_content(name_a)
+        raw_b = self._get_raw_content(name_b)
 
         hunks = list(
             difflib.unified_diff(
-                content_a.splitlines(keepends=True),
-                content_b.splitlines(keepends=True),
+                raw_a.splitlines(keepends=True),
+                raw_b.splitlines(keepends=True),
                 fromfile=name_a,
                 tofile=name_b,
             )
@@ -224,10 +255,10 @@ class Prompt(QueryFactory):
         return VersionLineDiff(name_a=name_a, name_b=name_b, hunks=hunks)
 
     def compare_versions_chars(self, name_a: str, name_b: str) -> VersionDiff:
-        content_a = self.get_version_content(name_a)
-        content_b = self.get_version_content(name_b)
+        raw_a = self._get_raw_content(name_a)
+        raw_b = self._get_raw_content(name_b)
 
-        sm = difflib.SequenceMatcher(None, content_a, content_b)
+        sm = difflib.SequenceMatcher(None, raw_a, raw_b)
         chunks = [
             DiffChunk(
                 tag=tag,
@@ -235,8 +266,8 @@ class Prompt(QueryFactory):
                 old_end=i2,
                 new_start=j1,
                 new_end=j2,
-                old_text=content_a[i1:i2],
-                new_text=content_b[j1:j2],
+                old_text=raw_a[i1:i2],
+                new_text=raw_b[j1:j2],
             )
             for tag, i1, i2, j1, j2 in sm.get_opcodes()
         ]

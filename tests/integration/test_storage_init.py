@@ -57,7 +57,7 @@ def test_uc01_002_reinitialization_preserves_existing_data(tmp_path):
     db_path = tmp_path / "storage_reinit.sqlite3"
     prompt_name = "prompt_reinit"
     version_name = "v1"
-    content = "Hello, world!"
+    content = [("user", "Hello, world!")]
 
     storage = Storage(str(db_path))
     try:

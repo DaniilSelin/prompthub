@@ -39,8 +39,8 @@ class Storage(QueryFactory):
         version: str | None = None,
         adapter_type: str | None = None,
     ):
-        from core.domain.prompt_messages import PromptMessages
-        from core.adapters.registry import get_adapter
+        from prompthub.core.domain.prompt_messages import PromptMessages
+        from prompthub.core.adapters.registry import get_adapter
 
         row = self.repo.get_prompt_by_name(name)
         if not row:
@@ -113,7 +113,7 @@ class Storage(QueryFactory):
             else:
                 prompt = Prompt(prompt_id, self.repo)
                 content = prompt.get_version_content(latest["name"])
-                token_count = len(content.split())
+                token_count = sum(len(msg[1].split()) for msg in content)
 
             entry = {**metadata, "token_count": token_count, "costs": {}}
 

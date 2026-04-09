@@ -6,4 +6,4 @@ class OpenAIAdapter(LLMAdapter):
     """Конвертирует промпт в формат OpenAI Chat Completions API."""
 
     def convert(self, prompt: PromptMessages) -> list[dict]:
-        return [{"role": "user", "content": prompt.content}]
+        return [{"role": role, "content": content} for role, content in prompt.content]

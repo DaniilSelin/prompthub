@@ -173,6 +173,20 @@ class PromptRepo:
         return version_id
 
     def delete_version(self, version_id: int):
+        row = self.conn.execute(
+            f"SELECT prompt_id FROM {Fields._PROMPT_VERSIONS_TABLE} WHERE id = ?",
+            (version_id,),
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"Версия с id={version_id} не найдена")
+
+        count = self.conn.execute(
+            f"SELECT COUNT(*) FROM {Fields._PROMPT_VERSIONS_TABLE} WHERE prompt_id = ?",
+            (row["prompt_id"],),
+        ).fetchone()[0]
+        if count <= 1:
+            raise ValueError("Нельзя удалить единственную версию промпта")
+
         cur = self.conn.cursor()
         cur.execute(
             f"DELETE FROM {Fields._PROMPT_VERSIONS_TABLE} WHERE id = ?", (version_id,)

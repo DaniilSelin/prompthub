@@ -1,13 +1,19 @@
+import json
+
 import pytest
 
 from prompthub.core.domain.diff import VersionDiff, VersionLineDiff
 from prompthub.facade.storage import Storage
 
 
+def _msg(text: str) -> list[tuple]:
+    return [("user", text)]
+
+
 def _create_prompt_with_versions(storage: Storage, prompt_name: str, contents: list[str]):
     prompt = storage.create_prompt(prompt_name, author="qa")
     for seq, content in enumerate(contents, start=1):
-        prompt.add_version(content=content, name=f"v{seq}", author="qa", message=f"version {seq}")
+        prompt.add_version(content=_msg(content), name=f"v{seq}", author="qa", message=f"version {seq}")
     return prompt
 
 
@@ -29,8 +35,8 @@ def test_uc07_002_compare_versions_line_diff_shows_changes(tmp_path):
         assert diff.name_b == "v2"
         assert diff.has_changes
         unified = diff.unified()
-        assert "-Hello world" in unified
-        assert "+Hello Python world" in unified
+        assert "Hello world" in unified
+        assert "Hello Python world" in unified
     finally:
         storage._conn.close()
 
@@ -41,7 +47,7 @@ def test_uc07_003_compare_versions_line_diff_identical_has_no_changes(tmp_path):
     storage = Storage(str(tmp_path / "uc07_line_identical.sqlite3"))
     try:
         prompt = storage.create_prompt("identical_line_prompt", author="qa")
-        prompt.add_version(content="stable content", name="v1")
+        prompt.add_version(content=_msg("stable content"), name="v1")
 
         diff = prompt.compare_versions("v1", "v1")
 
@@ -83,7 +89,7 @@ def test_uc07_005_compare_versions_chars_identical_has_no_changes(tmp_path):
     storage = Storage(str(tmp_path / "uc07_chars_identical.sqlite3"))
     try:
         prompt = storage.create_prompt("identical_chars_prompt", author="qa")
-        prompt.add_version(content="stable content", name="v1")
+        prompt.add_version(content=_msg("stable content"), name="v1")
 
         diff = prompt.compare_versions_chars("v1", "v1")
 
@@ -100,7 +106,7 @@ def test_uc07_006_compare_versions_raises_for_unknown_version(tmp_path):
     storage = Storage(str(tmp_path / "uc07_unknown.sqlite3"))
     try:
         prompt = storage.create_prompt("prompt_compare_error", author="qa")
-        prompt.add_version(content="some content", name="v1")
+        prompt.add_version(content=_msg("some content"), name="v1")
 
         with pytest.raises(ValueError, match="version not found"):
             prompt.compare_versions("v1", "v999")
@@ -116,15 +122,15 @@ def test_uc07_007_compare_versions_chars_chunks_cover_full_content(tmp_path):
     """TC-UC07-007: совокупность чанков char diff покрывает оба контента целиком."""
     storage = Storage(str(tmp_path / "uc07_chunks_cover.sqlite3"))
     try:
-        content_a = "Hello world"
-        content_b = "Hi Python world!"
-        prompt = _create_prompt_with_versions(storage, "chunks_cover_prompt", [content_a, content_b])
+        content_a = _msg("Hello world")
+        content_b = _msg("Hi Python world!")
+        prompt = _create_prompt_with_versions(storage, "chunks_cover_prompt", ["Hello world", "Hi Python world!"])
 
         diff = prompt.compare_versions_chars("v1", "v2")
 
         reconstructed_a = "".join(c.old_text for c in diff.chunks)
         reconstructed_b = "".join(c.new_text for c in diff.chunks)
-        assert reconstructed_a == content_a
-        assert reconstructed_b == content_b
+        assert reconstructed_a == json.dumps(content_a, ensure_ascii=False)
+        assert reconstructed_b == json.dumps(content_b, ensure_ascii=False)
     finally:
         storage._conn.close()

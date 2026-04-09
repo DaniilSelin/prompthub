@@ -3,6 +3,10 @@ import pytest
 from prompthub.facade.storage import Storage
 
 
+def _msg(text: str) -> list[tuple]:
+    return [("user", text)]
+
+
 def _create_prompt_with_versions(
     storage: Storage, prompt_name: str, contents: list[str]
 ):
@@ -10,7 +14,7 @@ def _create_prompt_with_versions(
 
     for seq, content in enumerate(contents, start=1):
         prompt.add_version(
-            content=content,
+            content=_msg(content),
             name=f"v{seq}",
             author="qa",
             message=f"version {seq}",
@@ -61,7 +65,7 @@ def test_uc16_001_returns_latest_version_content(tmp_path):
         latest_content = prompt.get_version_content(latest_version_name)
 
         assert latest_version_name == "v3"
-        assert latest_content == expected_contents[-1]
+        assert latest_content == _msg(expected_contents[-1])
     finally:
         storage._conn.close()
 
@@ -90,8 +94,8 @@ def test_uc16_002_reconstructs_content_from_snapshot_and_delta_chain(tmp_path):
         v6_content = prompt.get_version_content("v6")
         v7_content = prompt.get_version_content("v7")
 
-        assert v6_content == contents[5]
-        assert v7_content == contents[6]
+        assert v6_content == _msg(contents[5])
+        assert v7_content == _msg(contents[6])
 
         snapshot_row = storage._conn.execute(
             """
@@ -103,8 +107,9 @@ def test_uc16_002_reconstructs_content_from_snapshot_and_delta_chain(tmp_path):
             (prompt.id,),
         ).fetchall()
 
+        import json
         assert [row["seq"] for row in snapshot_row] == [1, 5]
-        assert snapshot_row[-1]["snapshot_content"] == contents[4]
+        assert json.loads(snapshot_row[-1]["snapshot_content"]) == [list(m) for m in _msg(contents[4])]
     finally:
         storage._conn.close()
 
@@ -129,7 +134,7 @@ def test_uc08_004_rollback_hard_by_name_removes_later_versions(tmp_path):
         versions = prompt.list_versions()
         assert len(versions) == 2
         assert [v.name for v in versions] == ["v1", "v2"]
-        assert prompt.get_version_content("v2") == "v2 content"
+        assert prompt.get_version_content("v2") == _msg("v2 content")
     finally:
         storage._conn.close()
 
@@ -152,7 +157,7 @@ def test_uc08_005_rollback_hard_by_steps_removes_later_versions(tmp_path):
         versions = prompt.list_versions()
         assert len(versions) == 2
         assert versions[-1].name == "v2"
-        assert prompt.get_version_content("v2") == "second"
+        assert prompt.get_version_content("v2") == _msg("second")
     finally:
         storage._conn.close()
 

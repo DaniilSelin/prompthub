@@ -7,4 +7,4 @@ class PromptMessages:
 
     name: str
     version: str
-    content: str
+    content: list[tuple[str, str]]

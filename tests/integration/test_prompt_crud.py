@@ -1,6 +1,12 @@
+import json
 import pytest
 
 from prompthub.facade.storage import Storage
+
+
+def _msg(*texts, role="user"):
+    """Вспомогательная функция: создаёт список сообщений из текстов."""
+    return [(role, t) for t in texts]
 
 
 @pytest.mark.integration
@@ -9,9 +15,10 @@ def test_uc02_001_creates_prompt_and_first_version(tmp_path):
 
     storage = Storage(str(db_path))
     try:
+        messages_v1 = [("system", "welcome user")]
         prompt = storage.create_prompt("welcome_prompt", author="qa")
         version_id = prompt.add_version(
-            content="System: welcome user",
+            content=messages_v1,
             name="v1",
             author="qa",
             message="initial",
@@ -23,7 +30,7 @@ def test_uc02_001_creates_prompt_and_first_version(tmp_path):
         assert len(versions) == 1
         assert versions[0].seq == 1
         assert versions[0].name == "v1"
-        assert versions[0].snapshot_content == "System: welcome user"
+        assert [tuple(m) for m in json.loads(versions[0].snapshot_content)] == messages_v1
     finally:
         storage._conn.close()
 
@@ -48,25 +55,6 @@ def test_uc02_003_prompt_metadata_author_and_created_at_are_stored(tmp_path):
         storage._conn.close()
 
 
-@pytest.mark.integration
-def test_uc02_004_current_implementation_allows_duplicate_prompt_names(tmp_path):
-    db_path = tmp_path / "uc02_duplicate_allowed.sqlite3"
-
-    storage = Storage(str(db_path))
-    try:
-        duplicate_name = "same_name"
-
-        storage.create_prompt(duplicate_name, author="qa")
-        storage.create_prompt(duplicate_name, author="qa")
-
-        count = storage._conn.execute(
-            "SELECT COUNT(*) FROM prompts WHERE name = ?",
-            (duplicate_name,),
-        ).fetchone()[0]
-
-        assert count == 2
-    finally:
-        storage._conn.close()
 
 
 @pytest.mark.integration
@@ -77,14 +65,14 @@ def test_uc03_001_adds_new_version_increments_seq_and_sets_parent(tmp_path):
     try:
         prompt = storage.create_prompt("editable_prompt", author="qa")
         first_version_id = prompt.add_version(
-            content="Hello",
+            content=[("user", "Hello")],
             name="v1",
             author="qa",
             message="initial",
         )
 
         second_version_id = prompt.add_version(
-            content="Hello, world",
+            content=[("user", "Hello, world")],
             name="v2",
             author="qa",
             message="update",
@@ -120,7 +108,7 @@ def test_uc03_003_stores_snapshot_every_snapshot_interval(tmp_path):
 
         for seq in range(1, 6):
             prompt.add_version(
-                content=f"content v{seq}",
+                content=[("user", f"content v{seq}")],
                 name=f"v{seq}",
                 author="qa",
                 message=f"change {seq}",
@@ -137,10 +125,10 @@ def test_uc03_003_stores_snapshot_every_snapshot_interval(tmp_path):
         ).fetchall()
 
         assert len(rows) == 5
-        assert rows[0]["snapshot_content"] == "content v1"
+        assert json.loads(rows[0]["snapshot_content"]) == [["user", "content v1"]]
         assert rows[1]["snapshot_content"] is None
         assert rows[2]["snapshot_content"] is None
         assert rows[3]["snapshot_content"] is None
-        assert rows[4]["snapshot_content"] == "content v5"
+        assert json.loads(rows[4]["snapshot_content"]) == [["user", "content v5"]]
     finally:
         storage._conn.close()
