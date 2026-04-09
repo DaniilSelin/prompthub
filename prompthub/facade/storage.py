@@ -97,6 +97,7 @@ class Storage(QueryFactory):
 
     def list_prompts(self) -> list[dict]:
         import warnings
+        from prompthub.core.tokenizers.registry import count_tokens_per_model
 
         rows = self.repo.fetch_all_prompts()
         if not rows:
@@ -106,34 +107,36 @@ class Storage(QueryFactory):
         for row in rows:
             prompt_id = row["id"]
             metadata = self.repo.fetch_metadata(prompt_id)
+            model_tags: list[str] = metadata.get("model_tags") or []
 
+            # Получаем контент последней версии
             latest = self.repo.get_latest_version(prompt_id)
             if latest is None:
-                token_count = 0
+                content = []
             else:
-                from prompthub.core.tokenizers.registry import count_tokens
                 prompt = Prompt(prompt_id, self.repo)
                 content = prompt.get_version_content(latest["name"])
-                model_tags = metadata.get("model_tags") or []
-                token_count = count_tokens(content, model_tags)
 
-            entry = {**metadata, "token_count": token_count, "costs": {}}
+            # Для каждой модели — свой токенизатор, свои токены, своя цена
+            tariffs = self.repo.fetch_tariffs(model_tags) if model_tags else {}
+            token_counts = count_tokens_per_model(content, model_tags)
 
-            model_tags = metadata["model_tags"]
-            if model_tags:
-                tariffs = self.repo.fetch_tariffs(model_tags)
-                for tag in model_tags:
-                    if tag not in tariffs:
-                        warnings.warn(
-                            f"Тариф для модели '{tag}' не найден — стоимость не рассчитана"
-                        )
-                        entry["costs"][tag] = None
-                    else:
-                        tariff = tariffs[tag]
-                        entry["costs"][tag] = round(
-                            token_count / 1000 * tariff["input_price_per_1k"], 6
-                        )
+            costs: dict[str, dict] = {}
+            for tag in model_tags:
+                tokens = token_counts.get(tag, 0)
+                if tag not in tariffs:
+                    warnings.warn(
+                        f"Тариф для модели '{tag}' не найден — стоимость не рассчитана"
+                    )
+                    costs[tag] = {"token_count": tokens, "cost": None}
+                else:
+                    price = tariffs[tag]["input_price_per_1m"]
+                    costs[tag] = {
+                        "token_count": tokens,
+                        "cost": round(tokens / 1_000_000 * price, 6),
+                    }
 
+            entry = {**metadata, "costs": costs}
             result.append(entry)
 
         return result
@@ -143,8 +146,8 @@ class Storage(QueryFactory):
         return [{"name": r["name"], "type": r["type"]} for r in rows]
 
     def update_tariffs(self, url: str | None = None) -> int:
-        from infrastructure.pricing_gateway import PricingAPIGateway
-        from infrastructure.tariff_manager import TariffManager
+        from prompthub.infrastructure.pricing_gateway import PricingAPIGateway
+        from prompthub.infrastructure.tariff_manager import TariffManager
 
         gateway = PricingAPIGateway(**({"url": url} if url else {}))
         tariffs = gateway.fetch_pricing_data()  # ConnectionError / ValueError

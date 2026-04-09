@@ -4,8 +4,21 @@ import urllib.error
 
 from prompthub.core.domain.model_tariff import ModelTariff
 
-# Формат ответа: {"data": [{"id": "model-id", "pricing": {"prompt": "0.0001", "completion": "0.0002"}}, ...]}
+# OpenRouter отдаёт цены за токен (например 0.0000025 для GPT-4o input).
+# Умножаем на 1_000_000 чтобы получить цену за 1M токенов ($2.50).
+# Формат ответа:
+# {
+#   "data": [
+#     {
+#       "id": "openai/gpt-4o",
+#       "pricing": {"prompt": "0.0000025", "completion": "0.00001"},
+#       ...
+#     },
+#     ...
+#   ]
+# }
 DEFAULT_PRICING_URL = "https://openrouter.ai/api/v1/models"
+_PER_TOKEN_TO_PER_1M = 1_000_000
 
 
 class PricingAPIGateway:
@@ -33,13 +46,37 @@ class PricingAPIGateway:
 
         result = []
         for item in items:
-            tag_name = item["id"]
-            pricing = item.get("pricing", {})
+            model_id = item.get("id", "")
+            provider = self._extract_provider(model_id)
+            pricing = item.get("pricing") or {}
+
+            # OpenRouter: значения — строки с ценой за токен в USD.
+            # Пропускаем модели с нулевой или отсутствующей ценой (бесплатные / без данных).
+            try:
+                input_per_token = float(pricing.get("prompt") or 0)
+                output_per_token = float(pricing.get("completion") or 0)
+            except (ValueError, TypeError):
+                continue
+
             result.append(
                 ModelTariff(
-                    tag_name=tag_name,
-                    input_price_per_1k=float(pricing.get("prompt", 0.0)),
-                    output_price_per_1k=float(pricing.get("completion", 0.0)),
+                    tag_name=model_id,
+                    provider=provider,
+                    input_price_per_1m=round(input_per_token * _PER_TOKEN_TO_PER_1M, 6),
+                    output_price_per_1m=round(output_per_token * _PER_TOKEN_TO_PER_1M, 6),
                 )
             )
+
         return result
+
+    @staticmethod
+    def _extract_provider(model_id: str) -> str:
+        """Извлекает имя провайдера из идентификатора модели.
+
+        "openai/gpt-4o"              → "openai"
+        "anthropic/claude-3-5-sonnet" → "anthropic"
+        "gpt-4o"                      → ""   (нет префикса)
+        """
+        if "/" in model_id:
+            return model_id.split("/", 1)[0]
+        return ""

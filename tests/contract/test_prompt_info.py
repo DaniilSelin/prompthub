@@ -27,16 +27,37 @@ def test_uc05_001_list_all_prompts_with_metadata(storage):
 
 
 @pytest.mark.contract
-def test_uc05_002_list_prompts_includes_token_count(storage):
-    """list_prompts возвращает token_count для каждого промпта."""
+def test_uc05_002_list_prompts_includes_per_model_token_count_and_cost(storage):
+    """list_prompts возвращает costs с token_count и cost для каждой модели."""
+    from prompthub.core.tokenizers import OpenAIModelTag, register
+    from prompthub.infrastructure.pricing_gateway import PricingAPIGateway
+    from prompthub.infrastructure.tariff_manager import TariffManager
+
+    # Регистрируем токенизатор и тариф вручную (без сети)
+    register("openai/gpt-4o", OpenAIModelTag("gpt-4o"))
+    TariffManager(storage._conn).bulk_upsert([
+        __import__("prompthub.core.domain.model_tariff", fromlist=["ModelTariff"]).ModelTariff(
+            tag_name="openai/gpt-4o",
+            provider="openai",
+            input_price_per_1m=2.5,
+            output_price_per_1m=10.0,
+        )
+    ])
+
     prompt = storage.create_prompt("priced_prompt", author="qa")
     prompt.add_version([("user", "hello world")], name="v1")
+    storage.add_model_tags("priced_prompt", ["openai/gpt-4o"])
 
     data = storage.list_prompts()
 
     assert len(data) == 1
-    assert "token_count" in data[0]
-    assert data[0]["token_count"] == 2
+    costs = data[0]["costs"]
+    assert "openai/gpt-4o" in costs
+    model_info = costs["openai/gpt-4o"]
+    assert "token_count" in model_info
+    assert model_info["token_count"] > 0
+    assert model_info["cost"] is not None
+    assert model_info["cost"] > 0
 
 
 # --- ВИ-6: История версий ---

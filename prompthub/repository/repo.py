@@ -19,8 +19,9 @@ class PromptRepo:
         self.conn.executescript(_INIT_SCHEMA_SQL)
         # миграция: добавить колонки если существующая БД создана без них
         for col, definition in [
-            ("input_price_per_1k", "REAL DEFAULT 0.0"),
-            ("output_price_per_1k", "REAL DEFAULT 0.0"),
+            ("provider", "TEXT NOT NULL DEFAULT ''"),
+            ("input_price_per_1m", "REAL DEFAULT 0.0"),
+            ("output_price_per_1m", "REAL DEFAULT 0.0"),
             ("updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
         ]:
             try:
@@ -332,7 +333,7 @@ class PromptRepo:
         placeholders = ",".join("?" * len(tag_names))
         cur = self.conn.cursor()
         cur.execute(
-            f"SELECT tag_name, input_price_per_1k, output_price_per_1k "
+            f"SELECT tag_name, provider, input_price_per_1m, output_price_per_1m "
             f"FROM model_tariffs WHERE tag_name IN ({placeholders})",
             tag_names,
         )

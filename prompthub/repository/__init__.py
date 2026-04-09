@@ -109,8 +109,9 @@ WHERE snapshot_content IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS model_tariffs (
     tag_name TEXT NOT NULL PRIMARY KEY,
-    input_price_per_1k REAL DEFAULT 0.0,
-    output_price_per_1k REAL DEFAULT 0.0,
+    provider TEXT NOT NULL DEFAULT '',
+    input_price_per_1m REAL DEFAULT 0.0,
+    output_price_per_1m REAL DEFAULT 0.0,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 """
