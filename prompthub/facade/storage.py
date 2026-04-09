@@ -111,9 +111,11 @@ class Storage(QueryFactory):
             if latest is None:
                 token_count = 0
             else:
+                from prompthub.core.tokenizers.registry import count_tokens
                 prompt = Prompt(prompt_id, self.repo)
                 content = prompt.get_version_content(latest["name"])
-                token_count = sum(len(msg[1].split()) for msg in content)
+                model_tags = metadata.get("model_tags") or []
+                token_count = count_tokens(content, model_tags)
 
             entry = {**metadata, "token_count": token_count, "costs": {}}
 
