@@ -2,6 +2,7 @@ from prompthub.core.tokenizers.base import ModelTag
 
 
 class AnthropicModelTag(ModelTag):
+    provider_key = "anthropic"
     """Подсчёт токенов для моделей Anthropic (Claude).
 
     Anthropic не публикует свой токенизатор. Используем tiktoken с кодировкой

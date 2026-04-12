@@ -25,9 +25,14 @@ class Storage(QueryFactory):
     def execute(self, query: BaseQuery):
         return self.repo.execute(query)
 
-    def create_prompt(self, name: str) -> Prompt:
+    def create_prompt(self, name: str, model_tags=None) -> Prompt:
+        """Создаёт новый промпт. model_tags — список ModelTag-объектов."""
         prompt_id = self.repo.create_prompt(name)
-        return Prompt(prompt_id, self.repo)
+        prompt = Prompt(prompt_id, self.repo)
+        if model_tags:
+            for mt in model_tags:
+                prompt.add_model_tag(mt)
+        return prompt
 
     def fetch_prompt(
         self,
@@ -92,7 +97,6 @@ class Storage(QueryFactory):
         return [self.repo.fetch_metadata(r["id"]) for r in rows]
 
     def list_prompts(self) -> list[dict]:
-        import warnings
         from prompthub.core.tokenizers.registry import count_tokens_per_model
 
         rows = self.repo.fetch_all_prompts()
@@ -103,7 +107,9 @@ class Storage(QueryFactory):
         for row in rows:
             prompt_id = row["id"]
             metadata = self.repo.fetch_metadata(prompt_id)
-            model_tags: list[str] = metadata.get("model_tags") or []
+            # model_tags — список {"name": ..., "provider": ...}
+            model_tag_rows: list[dict] = metadata.get("model_tags") or []
+            model_tag_names = [r["name"] for r in model_tag_rows]
 
             # Получаем контент последней версии
             latest = self.repo.get_latest_version(prompt_id)
@@ -113,21 +119,22 @@ class Storage(QueryFactory):
                 prompt = Prompt(prompt_id, self.repo)
                 content = prompt.get_version_content(latest["name"])
 
-            # Для каждой модели — свой токенизатор, свои токены, своя цена
-            tariffs = self.repo.fetch_tariffs(model_tags) if model_tags else {}
-            token_counts = count_tokens_per_model(content, model_tags)
+            # Токены считаем токенизатором провайдера, цену берём из тарифов
+            tariffs = self.repo.fetch_tariffs(model_tag_names) if model_tag_rows else {}
+            token_counts = count_tokens_per_model(content, model_tag_rows)
 
             costs: dict[str, dict] = {}
-            for tag in model_tags:
-                tokens = token_counts.get(tag, 0)
-                if tag not in tariffs:
+            for tag_row in model_tag_rows:
+                tag_name = tag_row["name"]
+                tokens = token_counts.get(tag_name, 0)
+                if tag_name not in tariffs:
                     warnings.warn(
-                        f"Тариф для модели '{tag}' не найден — стоимость не рассчитана"
+                        f"Тариф для модели '{tag_name}' не найден — стоимость не рассчитана"
                     )
-                    costs[tag] = {"token_count": tokens, "cost": None}
+                    costs[tag_name] = {"token_count": tokens, "cost": None}
                 else:
-                    price = tariffs[tag]["input_price_per_1m"]
-                    costs[tag] = {
+                    price = tariffs[tag_name]["input_price_per_1m"]
+                    costs[tag_name] = {
                         "token_count": tokens,
                         "cost": round(tokens / 1_000_000 * price, 6),
                     }
@@ -139,22 +146,34 @@ class Storage(QueryFactory):
 
     def list_all_tags(self) -> list[dict]:
         rows = self.repo.fetch_all_tags()
-        return [{"name": r["name"], "type": r["type"]} for r in rows]
+        return [
+            {
+                "name": r[Fields.TAG_NAME],
+                "type": r[Fields.TAG_TYPE],
+                "provider": r[Fields.TAG_PROVIDER],
+            }
+            for r in rows
+        ]
 
     def update_tariffs(self, url: str | None = None) -> int:
+        """Обновляет тарифы только для моделей, зарегистрированных в тегах.
+
+        Запрашивает все цены из внешнего источника, затем сохраняет только те,
+        чьё имя совпадает с тегом типа model в БД. Это предотвращает хранение
+        цен для всех 500+ моделей OpenRouter.
+        """
         from prompthub.infrastructure.pricing_gateway import PricingAPIGateway
         from prompthub.infrastructure.tariff_manager import TariffManager
 
+        known_tags = self.repo.fetch_all_model_tag_names()
         gateway = PricingAPIGateway(**({"url": url} if url else {}))
-        tariffs = gateway.fetch_pricing_data()  # ConnectionError / ValueError
+        all_tariffs = gateway.fetch_pricing_data()  # ConnectionError / ValueError
 
-        manager = TariffManager(self._conn)
-        return manager.bulk_upsert(tariffs)  # RuntimeError при ошибке БД
+        filtered = [t for t in all_tariffs if t.tag_name in known_tags]
+        return TariffManager(self._conn).bulk_upsert(filtered)  # RuntimeError при ошибке БД
 
-    def register_tariff(self, tag_name: str):
-        self.repo.register_tariff(tag_name)
-
-    def remove_model_tags(self, name: str, model_tags: list[str]) -> list[str]:
+    def remove_model_tags(self, name: str, model_tags: list) -> list[str]:
+        """Отвязывает ModelTag-объекты от промпта. Возвращает список отвязанных имён."""
         row = self.repo.get_prompt_by_name(name)
         if not row:
             raise KeyError(f"Промпт '{name}' не найден")
@@ -163,36 +182,36 @@ class Storage(QueryFactory):
         current = self.repo.fetch_current_model_tags(prompt_id)
 
         to_remove = []
-        for tag in model_tags:
-            if tag not in current:
-                warnings.warn(f"Тег '{tag}': не привязан к промпту — пропущен")
+        for mt in model_tags:
+            tag_name = mt.model_name
+            if tag_name not in current:
+                warnings.warn(f"Тег '{tag_name}': не привязан к промпту — пропущен")
             else:
-                to_remove.append(tag)
+                to_remove.append(tag_name)
 
         if to_remove:
             self.repo.delete_prompt_model_tag_links(prompt_id, to_remove)
 
         return to_remove
 
-    def add_model_tags(self, name: str, model_tags: list[str]) -> list[str]:
+    def add_model_tags(self, name: str, model_tags: list) -> list[str]:
+        """Привязывает ModelTag-объекты к промпту. Возвращает список добавленных имён."""
         row = self.repo.get_prompt_by_name(name)
         if not row:
             raise KeyError(f"Промпт '{name}' не найден")
 
         prompt_id = row["id"]
         current = self.repo.fetch_current_model_tags(prompt_id)
-        available = self.repo.fetch_available_tariffs()
 
         to_add = []
-        for tag in model_tags:
-            if tag in current:
-                warnings.warn(f"Тег '{tag}': дубликат — уже привязан к промпту")
-            elif tag not in available:
-                warnings.warn(f"Тег '{tag}': нет тарифа — пропущен")
+        for mt in model_tags:
+            tag_name = mt.model_name
+            if tag_name in current:
+                warnings.warn(f"Тег '{tag_name}': дубликат — уже привязан к промпту")
             else:
-                to_add.append(tag)
+                to_add.append({"name": tag_name, "provider": type(mt).provider_key})
 
         if to_add:
             self.repo.create_prompt_model_tag_links(prompt_id, to_add)
 
-        return to_add
+        return [t["name"] for t in to_add]

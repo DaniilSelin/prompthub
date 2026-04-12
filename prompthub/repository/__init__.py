@@ -19,6 +19,7 @@ class Fields:
 
     TAG_NAME = "name"
     TAG_TYPE = "type"
+    TAG_PROVIDER = "provider"
 
 
 _INIT_SCHEMA_SQL = f"""
@@ -75,6 +76,7 @@ CREATE TABLE IF NOT EXISTS {Fields._TAG_TABLE} (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     {Fields.TAG_NAME} TEXT NOT NULL,
     {Fields.TAG_TYPE} TEXT NOT NULL CHECK({Fields.TAG_TYPE} IN ('{TAG_MODEL_TYPE}', '{TAG_PROMPT_TYPE}')),
+    {Fields.TAG_PROVIDER} TEXT NULL,
     UNIQUE({Fields.TAG_NAME}, {Fields.TAG_TYPE})
 );
 

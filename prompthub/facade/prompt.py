@@ -203,14 +203,39 @@ class Prompt(QueryFactory):
         ]
 
     def list_tags(self) -> list[dict]:
+        from prompthub.repository import Fields
         rows = self.repo.list_tags(self.id)
-        return [{"name": r["name"], "type": r["type"]} for r in rows]
+        return [
+            {
+                "name": r[Fields.TAG_NAME],
+                "type": r[Fields.TAG_TYPE],
+                "provider": r[Fields.TAG_PROVIDER],
+            }
+            for r in rows
+        ]
 
-    def add_tag(self, tag_name: str, tag_type: str):
-        self.repo.add_tag(self.id, tag_name, tag_type)
+    def add_model_tag(self, model_tag) -> None:
+        """Привязывает ModelTag к промпту. Провайдер определяется из класса объекта."""
+        from prompthub.repository import TAG_MODEL_TYPE
+        provider_key = type(model_tag).provider_key
+        self.repo.add_tag(self.id, model_tag.model_name, TAG_MODEL_TYPE, provider_key)
 
-    def remove_tag(self, tag_name: str, tag_type: str):
-        self.repo.remove_tag(self.id, tag_name, tag_type)
+    def remove_model_tag(self, model_tag) -> None:
+        """Отвязывает ModelTag от промпта."""
+        from prompthub.repository import TAG_MODEL_TYPE
+        self.repo.remove_tag(self.id, model_tag.model_name, TAG_MODEL_TYPE)
+
+    def add_prompt_tag(self, tag) -> None:
+        """Привязывает PromptTag (категорийный тег) к промпту."""
+        from prompthub.repository import TAG_PROMPT_TYPE
+        value = tag.value if hasattr(tag, "value") else str(tag)
+        self.repo.add_tag(self.id, value, TAG_PROMPT_TYPE)
+
+    def remove_prompt_tag(self, tag) -> None:
+        """Отвязывает PromptTag от промпта."""
+        from prompthub.repository import TAG_PROMPT_TYPE
+        value = tag.value if hasattr(tag, "value") else str(tag)
+        self.repo.remove_tag(self.id, value, TAG_PROMPT_TYPE)
 
     def _assemble(self, target_seq: int) -> str:
         snapshot = self.repo.get_nearest_snapshot(self.id, target_seq)

@@ -2,6 +2,7 @@ from prompthub.core.tokenizers.base import ModelTag, Messages
 
 
 class OpenAIModelTag(ModelTag):
+    provider_key = "openai"
     """Подсчёт токенов через tiktoken (библиотека OpenAI).
 
     Поддерживает любую модель OpenAI: gpt-4o, gpt-4, gpt-3.5-turbo и др.

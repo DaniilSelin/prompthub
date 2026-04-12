@@ -2,6 +2,7 @@ from prompthub.core.tokenizers.base import ModelTag
 
 
 class HuggingFaceModelTag(ModelTag):
+    provider_key = "huggingface"
     """Подсчёт токенов через transformers.AutoTokenizer (HuggingFace).
 
     Принимает любое имя модели из HuggingFace Hub:

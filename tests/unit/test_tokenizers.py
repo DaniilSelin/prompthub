@@ -1,6 +1,6 @@
 """
-Юнит-тесты для системы подсчёта токенов (ВИ: подсчёт стоимости промпта).
-Покрывает: базовый класс ModelTag, конкретные провайдеры, реестр.
+Юнит-тесты для системы подсчёта токенов.
+Покрывает: базовый класс ModelTag, конкретные провайдеры, реестр провайдеров.
 """
 import sys
 import warnings
@@ -15,23 +15,21 @@ import prompthub.core.tokenizers.registry as reg
 
 
 # ---------------------------------------------------------------------------
-# Вспомогательные фикстуры
+# Вспомогательные тестовые классы
 # ---------------------------------------------------------------------------
-
-@pytest.fixture(autouse=True)
-def isolated_registry(monkeypatch):
-    """Каждый тест работает с чистым реестром — не влияет на глобальное состояние."""
-    monkeypatch.setattr(reg, "_registry", {})
-
 
 class _WordCountTag(ModelTag):
     """Тестовый тег: считает слова, не зависит от внешних библиотек."""
+    provider_key = "word-count-test"
+
     def _count_text(self, text: str) -> int:
         return len(text.split())
 
 
 class _BrokenTag(ModelTag):
     """Тестовый тег: всегда бросает исключение."""
+    provider_key = "broken-test"
+
     def _count_text(self, text: str) -> int:
         raise RuntimeError("tokenizer unavailable")
 
@@ -69,6 +67,11 @@ class TestModelTagBase:
     def test_empty_messages_returns_zero(self):
         tag = _WordCountTag("dummy")
         assert tag.get_token_count([]) == 0
+
+    def test_provider_key_is_defined_on_subclass(self):
+        assert OpenAIModelTag.provider_key == "openai"
+        assert AnthropicModelTag.provider_key == "anthropic"
+        assert HuggingFaceModelTag.provider_key == "huggingface"
 
 
 # ---------------------------------------------------------------------------
@@ -189,60 +192,88 @@ class TestHuggingFaceModelTag:
 
 
 # ---------------------------------------------------------------------------
-# Registry: count_tokens_per_model
+# Registry: _PROVIDER_REGISTRY, resolve_tokenizer, count_tokens_per_model
 # ---------------------------------------------------------------------------
 
 class TestRegistry:
 
-    def test_uses_registered_tokenizer_per_model(self):
-        class Fixed(ModelTag):
-            def __init__(self, n): super().__init__("x"); self.n = n
-            def _count_text(self, text): return self.n
+    def test_provider_registry_contains_known_providers(self):
+        assert "openai" in reg._PROVIDER_REGISTRY
+        assert "anthropic" in reg._PROVIDER_REGISTRY
+        assert "huggingface" in reg._PROVIDER_REGISTRY
 
-        reg.register("model-a", Fixed(10))
-        reg.register("model-b", Fixed(20))
+    def test_resolve_tokenizer_returns_correct_instance(self):
+        result = reg.resolve_tokenizer("gpt-4o", "openai")
+        assert isinstance(result, OpenAIModelTag)
+        assert result.model_name == "gpt-4o"
 
-        messages = [("user", "anything")]
-        result = reg.count_tokens_per_model(messages, ["model-a", "model-b"])
+    def test_resolve_tokenizer_returns_none_for_unknown_provider(self):
+        result = reg.resolve_tokenizer("some-model", "unknown-provider")
+        assert result is None
 
+    def test_count_tokens_per_model_uses_provider_from_row(self, monkeypatch):
+        class Fixed10(ModelTag):
+            provider_key = "fixed-10"
+            def _count_text(self, text): return 10
+
+        class Fixed20(ModelTag):
+            provider_key = "fixed-20"
+            def _count_text(self, text): return 20
+
+        monkeypatch.setitem(reg._PROVIDER_REGISTRY, "fixed-10", Fixed10)
+        monkeypatch.setitem(reg._PROVIDER_REGISTRY, "fixed-20", Fixed20)
+
+        rows = [
+            {"name": "model-a", "provider": "fixed-10"},
+            {"name": "model-b", "provider": "fixed-20"},
+        ]
+        result = reg.count_tokens_per_model([("user", "anything")], rows)
         assert result == {"model-a": 10, "model-b": 20}
 
-    def test_falls_back_to_word_count_for_unregistered_tag(self):
+    def test_falls_back_to_word_count_for_unknown_provider(self):
+        rows = [{"name": "unknown-model", "provider": "unknown-provider"}]
         messages = [("user", "hello world")]
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            result = reg.count_tokens_per_model(messages, ["unknown-model"])
+            result = reg.count_tokens_per_model(messages, rows)
 
         assert result["unknown-model"] == 2
-        assert any("unknown-model" in str(x.message) for x in w)
+        assert any("unknown-provider" in str(x.message) for x in w)
 
-    def test_minus_one_from_tokenizer_also_falls_back_to_word_count(self):
-        reg.register("broken", _BrokenTag("broken"))
+    def test_minus_one_from_tokenizer_falls_back_to_word_count(self, monkeypatch):
+        monkeypatch.setitem(reg._PROVIDER_REGISTRY, "broken-test", _BrokenTag)
+        rows = [{"name": "broken", "provider": "broken-test"}]
         messages = [("user", "one two three")]
 
         with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
-            result = reg.count_tokens_per_model(messages, ["broken"])
+            result = reg.count_tokens_per_model(messages, rows)
 
         assert result["broken"] == 3
 
-    def test_each_model_gets_independent_count(self):
+    def test_each_model_gets_independent_count(self, monkeypatch):
         class LenTag(ModelTag):
+            provider_key = "len-test"
             def _count_text(self, text): return len(text)
 
         class WordTag(ModelTag):
+            provider_key = "word-test"
             def _count_text(self, text): return len(text.split())
 
-        reg.register("len-model", LenTag("len"))
-        reg.register("word-model", WordTag("word"))
+        monkeypatch.setitem(reg._PROVIDER_REGISTRY, "len-test", LenTag)
+        monkeypatch.setitem(reg._PROVIDER_REGISTRY, "word-test", WordTag)
 
+        rows = [
+            {"name": "len-model", "provider": "len-test"},
+            {"name": "word-model", "provider": "word-test"},
+        ]
         messages = [("user", "hi there")]
-        result = reg.count_tokens_per_model(messages, ["len-model", "word-model"])
+        result = reg.count_tokens_per_model(messages, rows)
 
         assert result["len-model"] == 8   # len("hi there")
         assert result["word-model"] == 2  # 2 слова
 
-    def test_empty_tags_returns_empty_dict(self):
+    def test_empty_rows_returns_empty_dict(self):
         result = reg.count_tokens_per_model([("user", "hello")], [])
         assert result == {}

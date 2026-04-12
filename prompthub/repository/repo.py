@@ -6,7 +6,7 @@ from prompthub.core.domain.operations import (
     ReplaceOperation,
     Operation,
 )
-from prompthub.repository import Fields, _INIT_SCHEMA_SQL, SNAPSHOT_INTERVAL, TAG_MODEL_TYPE
+from prompthub.repository import Fields, _INIT_SCHEMA_SQL, SNAPSHOT_INTERVAL, TAG_MODEL_TYPE, TAG_PROMPT_TYPE
 from prompthub.repository.queries import BaseQuery, SearchQuery
 
 
@@ -259,7 +259,7 @@ class PromptRepo:
         cur = self.conn.cursor()
         cur.execute(
             f"""
-            SELECT t.{Fields.TAG_NAME}, t.{Fields.TAG_TYPE}
+            SELECT t.{Fields.TAG_NAME}, t.{Fields.TAG_TYPE}, t.{Fields.TAG_PROVIDER}
             FROM {Fields._TAG_TABLE} t
             JOIN prompt_tags pt ON pt.tag_id = t.id
             WHERE pt.prompt_id = ?
@@ -270,7 +270,7 @@ class PromptRepo:
         return cur.fetchall()
 
     def execute_tag_filter_query(self, filter_obj) -> list:
-        from repository.queries import SearchQuery
+        from prompthub.repository.queries import SearchQuery
 
         q = SearchQuery(Fields._PROMPTS_TABLE)
         q.filter(filter_obj)
@@ -297,8 +297,12 @@ class PromptRepo:
             "name": prompt["name"],
             "created_at": prompt["created_at"],
             "updated_at": last_ver["created_at"] if last_ver else None,
-            "tags": [r["name"] for r in tags if r["type"] == "prompt"],
-            "model_tags": [r["name"] for r in tags if r["type"] == "model"],
+            "tags": [r[Fields.TAG_NAME] for r in tags if r[Fields.TAG_TYPE] == TAG_PROMPT_TYPE],
+            "model_tags": [
+                {"name": r[Fields.TAG_NAME], "provider": r[Fields.TAG_PROVIDER]}
+                for r in tags
+                if r[Fields.TAG_TYPE] == TAG_MODEL_TYPE
+            ],
         }
 
     def fetch_all_prompts(self) -> list:
@@ -324,27 +328,21 @@ class PromptRepo:
         cur = self.conn.cursor()
         cur.execute(
             f"""
-            SELECT {Fields.TAG_NAME}, {Fields.TAG_TYPE}
+            SELECT {Fields.TAG_NAME}, {Fields.TAG_TYPE}, {Fields.TAG_PROVIDER}
             FROM {Fields._TAG_TABLE}
             ORDER BY {Fields.TAG_TYPE}, {Fields.TAG_NAME}
         """
         )
         return cur.fetchall()
 
-    def register_tariff(self, tag_name: str):
+    def fetch_all_model_tag_names(self) -> set[str]:
+        """Возвращает имена всех model-тегов в БД (независимо от привязки к промпту)."""
         cur = self.conn.cursor()
         cur.execute(
-            """
-            INSERT OR IGNORE INTO model_tariffs (tag_name) VALUES (?)
-        """,
-            (tag_name,),
+            f"SELECT {Fields.TAG_NAME} FROM {Fields._TAG_TABLE} WHERE {Fields.TAG_TYPE} = ?",
+            (TAG_MODEL_TYPE,),
         )
-        self.conn.commit()
-
-    def fetch_available_tariffs(self) -> set[str]:
-        cur = self.conn.cursor()
-        cur.execute("SELECT tag_name FROM model_tariffs")
-        return {r["tag_name"] for r in cur.fetchall()}
+        return {r["name"] for r in cur.fetchall()}
 
     def fetch_current_model_tags(self, prompt_id: int) -> set[str]:
         cur = self.conn.cursor()
@@ -363,19 +361,29 @@ class PromptRepo:
         for name in tag_names:
             self.remove_tag(prompt_id, name, TAG_MODEL_TYPE)
 
-    def create_prompt_model_tag_links(self, prompt_id: int, tag_names: list[str]):
-        for name in tag_names:
-            self.add_tag(prompt_id, name, TAG_MODEL_TYPE)
+    def create_prompt_model_tag_links(
+        self, prompt_id: int, tags: list[dict]
+    ):
+        """tags — список словарей {"name": ..., "provider": ...}"""
+        for tag in tags:
+            self.add_tag(prompt_id, tag["name"], TAG_MODEL_TYPE, tag.get("provider"))
 
-    def add_tag(self, prompt_id: int, tag_name: str, tag_type: str):
+    def add_tag(
+        self,
+        prompt_id: int,
+        tag_name: str,
+        tag_type: str,
+        provider: str | None = None,
+    ):
         cur = self.conn.cursor()
 
         cur.execute(
             f"""
-            INSERT OR IGNORE INTO {Fields._TAG_TABLE} ({Fields.TAG_NAME}, {Fields.TAG_TYPE})
-            VALUES (?, ?)
+            INSERT OR IGNORE INTO {Fields._TAG_TABLE}
+                ({Fields.TAG_NAME}, {Fields.TAG_TYPE}, {Fields.TAG_PROVIDER})
+            VALUES (?, ?, ?)
         """,
-            (tag_name, tag_type),
+            (tag_name, tag_type, provider),
         )
 
         cur.execute(

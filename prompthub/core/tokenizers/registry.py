@@ -1,66 +1,73 @@
 import warnings
 from prompthub.core.tokenizers.base import ModelTag, Messages
+from prompthub.core.tokenizers.openai_tag import OpenAIModelTag
+from prompthub.core.tokenizers.anthropic_tag import AnthropicModelTag
+from prompthub.core.tokenizers.huggingface_tag import HuggingFaceModelTag
 
-_registry: dict[str, ModelTag] = {}
+# Неизменяемый реестр провайдеров: provider_key → класс токенизатора.
+# Для добавления нового провайдера достаточно добавить строку здесь —
+# схема БД при этом не меняется (provider хранится как TEXT).
+_PROVIDER_REGISTRY: dict[str, type[ModelTag]] = {
+    "openai": OpenAIModelTag,
+    "anthropic": AnthropicModelTag,
+    "huggingface": HuggingFaceModelTag,
+}
 
-_WORD_COUNT_FALLBACK = "word_count"
 
+def resolve_tokenizer(model_name: str, provider_key: str) -> ModelTag | None:
+    """Создаёт экземпляр токенизатора по имени модели и ключу провайдера.
 
-def register(tag_name: str, model_tag: ModelTag) -> None:
-    """Регистрирует экземпляр ModelTag под именем тега из БД.
-
-    Пример:
-        register("openai/gpt-4o", OpenAIModelTag("gpt-4o"))
-        register("meta-llama/llama-3.1-8b-instruct", HuggingFaceModelTag("meta-llama/Llama-3.1-8B"))
+    Возвращает None, если провайдер не зарегистрирован.
     """
-    _registry[tag_name] = model_tag
-
-
-def get(tag_name: str) -> ModelTag | None:
-    """Возвращает зарегистрированный ModelTag или None."""
-    return _registry.get(tag_name)
+    cls = _PROVIDER_REGISTRY.get(provider_key)
+    if cls is None:
+        return None
+    return cls(model_name)
 
 
 def _word_count(messages: Messages) -> int:
     return sum(len(content.split()) for _, content in messages)
 
 
-def count_tokens_per_model(messages: Messages, model_tags: list[str]) -> dict[str, int]:
+def count_tokens_per_model(
+    messages: Messages,
+    model_tag_rows: list[dict],
+) -> dict[str, int]:
     """Считает токены для каждой модели её собственным токенизатором.
 
-    Возвращает словарь {tag_name: token_count}.
-    Если для тега нет зарегистрированного токенизатора или он вернул ошибку (-1),
+    Аргумент model_tag_rows — список словарей с ключами 'name' и 'provider',
+    полученных из БД. Пример: [{"name": "gpt-4o", "provider": "openai"}, ...]
+
+    Если провайдер не зарегистрирован или токенизатор вернул ошибку (-1),
     подставляется приближение по словам с предупреждением.
+
+    Возвращает словарь {model_name: token_count}.
     """
-    word_count = None  # вычисляем лениво, только если нужен fallback
+    word_count: int | None = None
     result: dict[str, int] = {}
 
-    for tag in model_tags:
-        mt = _registry.get(tag)
-        if mt is None:
+    for row in model_tag_rows:
+        model_name = row["name"]
+        provider_key = row.get("provider") or ""
+
+        tokenizer = resolve_tokenizer(model_name, provider_key)
+
+        if tokenizer is None:
             if word_count is None:
                 word_count = _word_count(messages)
             warnings.warn(
-                f"Нет зарегистрированного токенизатора для '{tag}'. "
-                f"Используется приближение по словам."
+                f"Нет зарегистрированного токенизатора для провайдера '{provider_key}' "
+                f"(модель '{model_name}'). Используется приближение по словам."
             )
-            result[tag] = word_count
+            result[model_name] = word_count
             continue
 
-        count = mt.get_token_count(messages)
+        count = tokenizer.get_token_count(messages)
         if count < 0:
             if word_count is None:
                 word_count = _word_count(messages)
-            result[tag] = word_count
+            result[model_name] = word_count
         else:
-            result[tag] = count
+            result[model_name] = count
 
     return result
-
-
-# Оставляем для обратной совместимости: возвращает токены первого рабочего тега.
-def count_tokens(messages: Messages, model_tags: list[str]) -> int:
-    if not model_tags:
-        return _word_count(messages)
-    per_model = count_tokens_per_model(messages, model_tags)
-    return next(iter(per_model.values())) if per_model else _word_count(messages)

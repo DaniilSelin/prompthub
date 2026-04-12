@@ -16,19 +16,72 @@ import prompthub.core.tokenizers.registry as reg
 # Вспомогательные классы и фикстуры
 # ---------------------------------------------------------------------------
 
-class _FixedTag(ModelTag):
-    """Токенизатор с фиксированным числом токенов — предсказуемый для тестов."""
-    def __init__(self, token_count: int, name: str = "fixed"):
-        super().__init__(name)
-        self._n = token_count
+class _Fixed100Tag(ModelTag):
+    """Токенизатор, всегда возвращающий 100 токенов."""
+    provider_key = "fixed-100"
 
     def _count_text(self, text: str) -> int:
-        return self._n
+        return 100
+
+
+class _Fixed200Tag(ModelTag):
+    """Токенизатор, всегда возвращающий 200 токенов."""
+    provider_key = "fixed-200"
+
+    def _count_text(self, text: str) -> int:
+        return 200
+
+
+class _Fixed1000Tag(ModelTag):
+    """Токенизатор, всегда возвращающий 1000 токенов."""
+    provider_key = "fixed-1000"
+
+    def _count_text(self, text: str) -> int:
+        return 1000
+
+
+class _Fixed500Tag(ModelTag):
+    """Токенизатор, всегда возвращающий 500 токенов."""
+    provider_key = "fixed-500"
+
+    def _count_text(self, text: str) -> int:
+        return 500
+
+
+class _Fixed42Tag(ModelTag):
+    provider_key = "fixed-42"
+
+    def _count_text(self, text: str) -> int:
+        return 42
+
+
+class _Fixed999Tag(ModelTag):
+    provider_key = "fixed-999"
+
+    def _count_text(self, text: str) -> int:
+        return 999
+
+
+class _Fixed10Tag(ModelTag):
+    provider_key = "fixed-10"
+
+    def _count_text(self, text: str) -> int:
+        return 10
 
 
 @pytest.fixture(autouse=True)
-def isolated_registry(monkeypatch):
-    monkeypatch.setattr(reg, "_registry", {})
+def inject_test_providers(monkeypatch):
+    """Добавляем тестовые провайдеры в реестр, не трогая production-провайдеры."""
+    for key, cls in [
+        ("fixed-100", _Fixed100Tag),
+        ("fixed-200", _Fixed200Tag),
+        ("fixed-1000", _Fixed1000Tag),
+        ("fixed-500", _Fixed500Tag),
+        ("fixed-42", _Fixed42Tag),
+        ("fixed-999", _Fixed999Tag),
+        ("fixed-10", _Fixed10Tag),
+    ]:
+        monkeypatch.setitem(reg._PROVIDER_REGISTRY, key, cls)
 
 
 @pytest.fixture
@@ -48,18 +101,15 @@ def _upsert(storage, *tariffs: ModelTariff):
 
 @pytest.mark.integration
 def test_each_model_uses_own_tokenizer(storage):
-    reg.register("model-a", _FixedTag(100, "model-a"))
-    reg.register("model-b", _FixedTag(200, "model-b"))
-
     _upsert(
         storage,
-        ModelTariff("model-a", "provider-a", input_price_per_1m=1.0, output_price_per_1m=2.0),
-        ModelTariff("model-b", "provider-b", input_price_per_1m=1.0, output_price_per_1m=2.0),
+        ModelTariff("model-a", "fixed-100", input_price_per_1m=1.0, output_price_per_1m=2.0),
+        ModelTariff("model-b", "fixed-200", input_price_per_1m=1.0, output_price_per_1m=2.0),
     )
 
     prompt = storage.create_prompt("p")
     prompt.add_version([("user", "hello")], name="v1")
-    storage.add_model_tags("p", ["model-a", "model-b"])
+    storage.add_model_tags("p", [_Fixed100Tag("model-a"), _Fixed200Tag("model-b")])
 
     data = storage.list_prompts()
     costs = data[0]["costs"]
@@ -74,18 +124,15 @@ def test_each_model_uses_own_tokenizer(storage):
 
 @pytest.mark.integration
 def test_cost_computed_from_own_token_count(storage):
-    reg.register("cheap-model", _FixedTag(1000, "cheap"))
-    reg.register("expensive-model", _FixedTag(500, "expensive"))
-
     _upsert(
         storage,
-        ModelTariff("cheap-model",     "p", input_price_per_1m=1.0,  output_price_per_1m=2.0),
-        ModelTariff("expensive-model",  "p", input_price_per_1m=10.0, output_price_per_1m=20.0),
+        ModelTariff("cheap-model",    "fixed-1000", input_price_per_1m=1.0,  output_price_per_1m=2.0),
+        ModelTariff("expensive-model", "fixed-500",  input_price_per_1m=10.0, output_price_per_1m=20.0),
     )
 
     prompt = storage.create_prompt("p")
     prompt.add_version([("user", "hello")], name="v1")
-    storage.add_model_tags("p", ["cheap-model", "expensive-model"])
+    storage.add_model_tags("p", [_Fixed1000Tag("cheap-model"), _Fixed500Tag("expensive-model")])
 
     data = storage.list_prompts()
     costs = data[0]["costs"]
@@ -103,16 +150,13 @@ def test_cost_computed_from_own_token_count(storage):
 @pytest.mark.integration
 def test_missing_tariff_gives_none_cost_but_has_token_count(storage):
     """Тариф удалён после привязки тега — cost=None, token_count сохраняется."""
-    reg.register("no-tariff-model", _FixedTag(42, "no-tariff"))
-
-    # Сначала регистрируем тариф и привязываем тег нормальным путём
     _upsert(
         storage,
-        ModelTariff("no-tariff-model", "p", input_price_per_1m=1.0, output_price_per_1m=2.0),
+        ModelTariff("no-tariff-model", "fixed-42", input_price_per_1m=1.0, output_price_per_1m=2.0),
     )
     prompt = storage.create_prompt("p")
     prompt.add_version([("user", "hello")], name="v1")
-    storage.add_model_tags("p", ["no-tariff-model"])
+    storage.add_model_tags("p", [_Fixed42Tag("no-tariff-model")])
 
     # Удаляем тариф — имитируем ситуацию устаревших данных
     storage._conn.execute("DELETE FROM model_tariffs WHERE tag_name = 'no-tariff-model'")
@@ -136,12 +180,18 @@ def test_missing_tariff_gives_none_cost_but_has_token_count(storage):
 def test_missing_tokenizer_falls_back_to_word_count(storage):
     _upsert(
         storage,
-        ModelTariff("unknown-model", "p", input_price_per_1m=2.0, output_price_per_1m=4.0),
+        ModelTariff("unknown-model", "unknown-provider", input_price_per_1m=2.0, output_price_per_1m=4.0),
     )
 
     prompt = storage.create_prompt("p")
     prompt.add_version([("user", "hello world"), ("system", "be helpful")], name="v1")
-    storage.add_model_tags("p", ["unknown-model"])
+
+    # Создаём ModelTag с неизвестным провайдером для теста
+    class _UnknownProviderTag(ModelTag):
+        provider_key = "unknown-provider"
+        def _count_text(self, text): return 0  # не будет вызван
+
+    storage.add_model_tags("p", [_UnknownProviderTag("unknown-model")])
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
@@ -173,14 +223,13 @@ def test_prompt_without_model_tags_has_empty_costs(storage):
 
 @pytest.mark.integration
 def test_prompt_without_versions_has_zero_cost(storage):
-    reg.register("some-model", _FixedTag(999, "some"))
     _upsert(
         storage,
-        ModelTariff("some-model", "p", input_price_per_1m=5.0, output_price_per_1m=10.0),
+        ModelTariff("some-model", "fixed-999", input_price_per_1m=5.0, output_price_per_1m=10.0),
     )
 
     storage.create_prompt("p")
-    storage.add_model_tags("p", ["some-model"])
+    storage.add_model_tags("p", [_Fixed999Tag("some-model")])
 
     data = storage.list_prompts()
     model_info = data[0]["costs"]["some-model"]
@@ -194,16 +243,15 @@ def test_prompt_without_versions_has_zero_cost(storage):
 
 @pytest.mark.integration
 def test_multiple_prompts_counted_independently(storage):
-    reg.register("model-x", _FixedTag(10, "x"))
     _upsert(
         storage,
-        ModelTariff("model-x", "p", input_price_per_1m=1.0, output_price_per_1m=2.0),
+        ModelTariff("model-x", "fixed-10", input_price_per_1m=1.0, output_price_per_1m=2.0),
     )
 
     for i in range(3):
         p = storage.create_prompt(f"prompt-{i}")
         p.add_version([("user", f"content {i}")], name="v1")
-        storage.add_model_tags(f"prompt-{i}", ["model-x"])
+        storage.add_model_tags(f"prompt-{i}", [_Fixed10Tag("model-x")])
 
     data = storage.list_prompts()
     assert len(data) == 3

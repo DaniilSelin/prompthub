@@ -1,5 +1,6 @@
 import pytest
 from prompthub.facade.storage import Storage
+from prompthub.core.domain.tag import PromptTag
 
 @pytest.fixture
 def storage(tmp_path):
@@ -34,8 +35,8 @@ def test_uc13_003_global_tags_persistence_contract(storage):
     p1 = storage.create_prompt("prompt_1")
     p2 = storage.create_prompt("prompt_2")
 
-    p1.add_tag(tag_name, "prompt")
-    p2.add_tag(tag_name, "prompt")
+    p1.add_prompt_tag(PromptTag(tag_name))
+    p2.add_prompt_tag(PromptTag(tag_name))
 
     storage.repo.delete_prompt(p1.id)
 
