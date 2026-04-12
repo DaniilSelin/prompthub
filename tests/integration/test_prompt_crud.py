@@ -16,11 +16,10 @@ def test_uc02_001_creates_prompt_and_first_version(tmp_path):
     storage = Storage(str(db_path))
     try:
         messages_v1 = [("system", "welcome user")]
-        prompt = storage.create_prompt("welcome_prompt", author="qa")
+        prompt = storage.create_prompt("welcome_prompt")
         version_id = prompt.add_version(
             content=messages_v1,
             name="v1",
-            author="qa",
             message="initial",
         )
 
@@ -36,20 +35,18 @@ def test_uc02_001_creates_prompt_and_first_version(tmp_path):
 
 
 @pytest.mark.integration
-def test_uc02_003_prompt_metadata_author_and_created_at_are_stored(tmp_path):
+def test_uc02_003_prompt_metadata_created_at_is_stored(tmp_path):
     db_path = tmp_path / "uc02_metadata.sqlite3"
 
     storage = Storage(str(db_path))
     try:
         prompt_name = "metadata_prompt"
-        prompt_author = "qa-author"
 
-        storage.create_prompt(prompt_name, author=prompt_author)
+        storage.create_prompt(prompt_name)
 
         row = storage.repo.get_prompt_by_name(prompt_name)
         assert row is not None
         assert row["name"] == prompt_name
-        assert row["author"] == prompt_author
         assert row["created_at"] is not None
     finally:
         storage._conn.close()
@@ -63,18 +60,16 @@ def test_uc03_001_adds_new_version_increments_seq_and_sets_parent(tmp_path):
 
     storage = Storage(str(db_path))
     try:
-        prompt = storage.create_prompt("editable_prompt", author="qa")
+        prompt = storage.create_prompt("editable_prompt")
         first_version_id = prompt.add_version(
             content=[("user", "Hello")],
             name="v1",
-            author="qa",
             message="initial",
         )
 
         second_version_id = prompt.add_version(
             content=[("user", "Hello, world")],
             name="v2",
-            author="qa",
             message="update",
         )
 
@@ -104,13 +99,12 @@ def test_uc03_003_stores_snapshot_every_snapshot_interval(tmp_path):
 
     storage = Storage(str(db_path))
     try:
-        prompt = storage.create_prompt("snapshot_prompt", author="qa")
+        prompt = storage.create_prompt("snapshot_prompt")
 
         for seq in range(1, 6):
             prompt.add_version(
                 content=[("user", f"content v{seq}")],
                 name=f"v{seq}",
-                author="qa",
                 message=f"change {seq}",
             )
 

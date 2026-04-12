@@ -15,11 +15,11 @@ def storage(tmp_path):
 
 @pytest.mark.integration
 def test_uc05_001_list_all_prompts_with_metadata(storage):
-    """Позитивный: Получение списка всех промптов с их авторами."""
-    storage.create_prompt("prompt_1", author="alice")
-    storage.create_prompt("prompt_2", author="bob")
+    """Позитивный: Получение списка всех промптов с метаданными."""
+    storage.create_prompt("prompt_1")
+    storage.create_prompt("prompt_2")
 
-    all_prompts = storage._conn.execute("SELECT name, author FROM prompts").fetchall()
+    all_prompts = storage._conn.execute("SELECT name FROM prompts").fetchall()
 
     assert len(all_prompts) == 2
     names = {p["name"] for p in all_prompts}
@@ -44,7 +44,7 @@ def test_uc05_002_list_prompts_includes_per_model_token_count_and_cost(storage):
         )
     ])
 
-    prompt = storage.create_prompt("priced_prompt", author="qa")
+    prompt = storage.create_prompt("priced_prompt")
     prompt.add_version([("user", "hello world")], name="v1")
     storage.add_model_tags("priced_prompt", ["openai/gpt-4o"])
 

@@ -17,19 +17,6 @@ class PromptRepo:
 
     def _init_schema(self):
         self.conn.executescript(_INIT_SCHEMA_SQL)
-        # миграция: добавить колонки если существующая БД создана без них
-        for col, definition in [
-            ("provider", "TEXT NOT NULL DEFAULT ''"),
-            ("input_price_per_1m", "REAL DEFAULT 0.0"),
-            ("output_price_per_1m", "REAL DEFAULT 0.0"),
-            ("updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
-        ]:
-            try:
-                self.conn.execute(
-                    f"ALTER TABLE model_tariffs ADD COLUMN {col} {definition}"
-                )
-            except Exception:
-                pass  # колонка уже существует
         self.conn.commit()
 
     def execute(self, query: BaseQuery):
@@ -44,20 +31,16 @@ class PromptRepo:
         self.conn.commit()
         return cur.rowcount
 
-    def create_prompt(
-        self,
-        name: str,
-        author: str | None = None,
-    ) -> int:
+    def create_prompt(self, name: str) -> int:
         cur = self.conn.cursor()
 
         cur.execute(
             f"""
                 INSERT INTO {Fields._PROMPTS_TABLE}
-                ({Fields.PROMPT_NAME}, {Fields.PROMPT_AUTHOR}, snapshot_interval)
-                VALUES (?, ?, ?)
+                ({Fields.PROMPT_NAME}, snapshot_interval)
+                VALUES (?, ?)
             """,
-            (name, author, SNAPSHOT_INTERVAL),
+            (name, SNAPSHOT_INTERVAL),
         )
 
         self.conn.commit()
@@ -148,7 +131,6 @@ class PromptRepo:
         seq: int,
         parent_id: int | None,
         snapshot_content: str | None,
-        author: str | None,
         message: str | None,
         changes: list[Operation],
     ):
@@ -159,10 +141,10 @@ class PromptRepo:
             INSERT INTO {Fields._PROMPT_VERSIONS_TABLE}
             ({Fields.PROMPT_VERSIONS_PROMPT_ID}, {Fields.PROMPT_VERSIONS_NAME},
              seq, parent_version_id, snapshot_content,
-             {Fields.PROMPT_VERSIONS_AUTHOR}, {Fields.PROMPT_VERSIONS_MESSAGE})
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+             {Fields.PROMPT_VERSIONS_MESSAGE})
+            VALUES (?, ?, ?, ?, ?, ?)
         """,
-            (prompt_id, name, seq, parent_id, snapshot_content, author, message),
+            (prompt_id, name, seq, parent_id, snapshot_content, message),
         )
 
         version_id = cur.lastrowid
@@ -313,7 +295,6 @@ class PromptRepo:
         last_ver = cur.fetchone()
         return {
             "name": prompt["name"],
-            "author": prompt["author"],
             "created_at": prompt["created_at"],
             "updated_at": last_ver["created_at"] if last_ver else None,
             "tags": [r["name"] for r in tags if r["type"] == "prompt"],

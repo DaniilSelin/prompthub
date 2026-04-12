@@ -11,9 +11,9 @@ def _msg(text: str) -> list[tuple]:
 
 
 def _create_prompt_with_versions(storage: Storage, prompt_name: str, contents: list[str]):
-    prompt = storage.create_prompt(prompt_name, author="qa")
+    prompt = storage.create_prompt(prompt_name)
     for seq, content in enumerate(contents, start=1):
-        prompt.add_version(content=_msg(content), name=f"v{seq}", author="qa", message=f"version {seq}")
+        prompt.add_version(content=_msg(content), name=f"v{seq}", message=f"version {seq}")
     return prompt
 
 
@@ -46,7 +46,7 @@ def test_uc07_003_compare_versions_line_diff_identical_has_no_changes(tmp_path):
     """TC-UC07-003: line diff для одной и той же версии пуст."""
     storage = Storage(str(tmp_path / "uc07_line_identical.sqlite3"))
     try:
-        prompt = storage.create_prompt("identical_line_prompt", author="qa")
+        prompt = storage.create_prompt("identical_line_prompt")
         prompt.add_version(content=_msg("stable content"), name="v1")
 
         diff = prompt.compare_versions("v1", "v1")
@@ -88,7 +88,7 @@ def test_uc07_005_compare_versions_chars_identical_has_no_changes(tmp_path):
     """TC-UC07-005: char diff для одной и той же версии не содержит изменённых чанков."""
     storage = Storage(str(tmp_path / "uc07_chars_identical.sqlite3"))
     try:
-        prompt = storage.create_prompt("identical_chars_prompt", author="qa")
+        prompt = storage.create_prompt("identical_chars_prompt")
         prompt.add_version(content=_msg("stable content"), name="v1")
 
         diff = prompt.compare_versions_chars("v1", "v1")
@@ -105,7 +105,7 @@ def test_uc07_006_compare_versions_raises_for_unknown_version(tmp_path):
     """TC-UC07-006: compare_versions выбрасывает ValueError для несуществующей версии."""
     storage = Storage(str(tmp_path / "uc07_unknown.sqlite3"))
     try:
-        prompt = storage.create_prompt("prompt_compare_error", author="qa")
+        prompt = storage.create_prompt("prompt_compare_error")
         prompt.add_version(content=_msg("some content"), name="v1")
 
         with pytest.raises(ValueError, match="version not found"):

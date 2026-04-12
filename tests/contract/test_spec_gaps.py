@@ -12,13 +12,12 @@ def _msg(text: str) -> list[tuple]:
 def _create_prompt_with_versions(
     storage: Storage, prompt_name: str, contents: list[str]
 ):
-    prompt = storage.create_prompt(prompt_name, author="qa")
+    prompt = storage.create_prompt(prompt_name)
 
     for seq, content in enumerate(contents, start=1):
         prompt.add_version(
             content=_msg(content),
             name=f"v{seq}",
-            author="qa",
             message=f"version {seq}",
         )
 
@@ -31,10 +30,10 @@ def test_uc02_002_requires_unique_prompt_name(tmp_path):
 
     storage = Storage(str(db_path))
     try:
-        storage.create_prompt("duplicate_name", author="qa")
+        storage.create_prompt("duplicate_name")
 
         with pytest.raises((sqlite3.IntegrityError, ValueError)):
-            storage.create_prompt("duplicate_name", author="qa")
+            storage.create_prompt("duplicate_name")
     finally:
         storage._conn.close()
 
@@ -45,11 +44,10 @@ def test_uc03_004_update_with_identical_content_does_not_create_new_version(tmp_
 
     storage = Storage(str(db_path))
     try:
-        prompt = storage.create_prompt("no_change_prompt", author="qa")
+        prompt = storage.create_prompt("no_change_prompt")
         v1_id = prompt.add_version(
             content=[("user", "stable content")],
             name="v1",
-            author="qa",
             message="initial",
         )
 
@@ -61,7 +59,6 @@ def test_uc03_004_update_with_identical_content_does_not_create_new_version(tmp_
         returned_id = prompt.add_version(
             content=[("user", "stable content")],
             name="v2",
-            author="qa",
             message="should be ignored",
         )
 
@@ -96,7 +93,6 @@ def test_uc08_001_rollback_by_version_name_creates_new_version_without_losing_hi
         prompt.rollback(
             name="v1",
             name_rollback_version="rollback_to_v1",
-            author="qa",
         )
 
         after = prompt.list_versions()
@@ -132,7 +128,6 @@ def test_uc08_002_rollback_by_steps_creates_new_version_without_losing_history(
         prompt.rollback(
             steps_back=2,
             name_rollback_version="rollback_steps_2",
-            author="qa",
         )
 
         after = prompt.list_versions()
@@ -154,11 +149,10 @@ def test_uc16_004_fetch_prompt_with_adapter_type(tmp_path):
 
     storage = Storage(str(db_path))
     try:
-        prompt = storage.create_prompt("prompt_adapter", author="qa")
+        prompt = storage.create_prompt("prompt_adapter")
         prompt.add_version(
             content=[("user", "Hello"), ("assistant", "Hi!")],
             name="v1",
-            author="qa",
             message="initial",
         )
 

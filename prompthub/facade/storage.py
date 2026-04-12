@@ -25,12 +25,8 @@ class Storage(QueryFactory):
     def execute(self, query: BaseQuery):
         return self.repo.execute(query)
 
-    def create_prompt(
-        self,
-        name: str,
-        author: str | None = None,
-    ) -> Prompt:
-        prompt_id = self.repo.create_prompt(name, author)
+    def create_prompt(self, name: str) -> Prompt:
+        prompt_id = self.repo.create_prompt(name)
         return Prompt(prompt_id, self.repo)
 
     def fetch_prompt(

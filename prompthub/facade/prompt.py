@@ -24,7 +24,6 @@ class PromptVersion:
         seq: int,
         parent_id: int | None,
         snapshot_content: str | None,
-        author: str | None,
         message: str | None,
         created_at: str,
     ):
@@ -34,7 +33,6 @@ class PromptVersion:
         self.seq = seq
         self.parent_id = parent_id
         self.snapshot_content = snapshot_content
-        self.author = author
         self.message = message
         self.created_at = created_at
 
@@ -90,7 +88,6 @@ class Prompt(QueryFactory):
         self,
         content: Messages,
         name: str,
-        author: str | None = None,
         message: str | None = None,
     ):
         self._validate_messages(content)
@@ -105,7 +102,6 @@ class Prompt(QueryFactory):
                 seq=1,
                 parent_id=None,
                 snapshot_content=serialized,
-                author=author,
                 message=message,
                 changes=[],
             )
@@ -126,7 +122,6 @@ class Prompt(QueryFactory):
             seq=new_seq,
             parent_id=latest["id"],
             snapshot_content=snapshot,
-            author=author,
             message=message,
             changes=changes,
         )
@@ -158,7 +153,6 @@ class Prompt(QueryFactory):
         name: str | None = None,
         steps_back: int | None = None,
         name_rollback_version: str = "rollback_version",
-        author: str | None = None,
     ):
         versions = self.list_versions()
         if not versions:
@@ -180,7 +174,6 @@ class Prompt(QueryFactory):
         return self.add_version(
             content=rollback_version_content,
             name=name_rollback_version,
-            author=author,
             message="rollback to " + target.name,
         )
 
@@ -203,7 +196,6 @@ class Prompt(QueryFactory):
                 seq=r["seq"],
                 parent_id=r["parent_version_id"],
                 snapshot_content=r["snapshot_content"],
-                author=r["author"],
                 message=r["message"],
                 created_at=r["created_at"],
             )

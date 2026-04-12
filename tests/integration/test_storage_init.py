@@ -61,11 +61,10 @@ def test_uc01_002_reinitialization_preserves_existing_data(tmp_path):
 
     storage = Storage(str(db_path))
     try:
-        prompt = storage.create_prompt(prompt_name, author="qa")
+        prompt = storage.create_prompt(prompt_name)
         prompt.add_version(
             content=content,
             name=version_name,
-            author="qa",
             message="initial version",
         )
 

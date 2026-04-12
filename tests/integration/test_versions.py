@@ -10,13 +10,12 @@ def _msg(text: str) -> list[tuple]:
 def _create_prompt_with_versions(
     storage: Storage, prompt_name: str, contents: list[str]
 ):
-    prompt = storage.create_prompt(prompt_name, author="qa")
+    prompt = storage.create_prompt(prompt_name)
 
     for seq, content in enumerate(contents, start=1):
         prompt.add_version(
             content=_msg(content),
             name=f"v{seq}",
-            author="qa",
             message=f"version {seq}",
         )
 

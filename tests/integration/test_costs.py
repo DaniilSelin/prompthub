@@ -57,7 +57,7 @@ def test_each_model_uses_own_tokenizer(storage):
         ModelTariff("model-b", "provider-b", input_price_per_1m=1.0, output_price_per_1m=2.0),
     )
 
-    prompt = storage.create_prompt("p", author="qa")
+    prompt = storage.create_prompt("p")
     prompt.add_version([("user", "hello")], name="v1")
     storage.add_model_tags("p", ["model-a", "model-b"])
 
@@ -83,7 +83,7 @@ def test_cost_computed_from_own_token_count(storage):
         ModelTariff("expensive-model",  "p", input_price_per_1m=10.0, output_price_per_1m=20.0),
     )
 
-    prompt = storage.create_prompt("p", author="qa")
+    prompt = storage.create_prompt("p")
     prompt.add_version([("user", "hello")], name="v1")
     storage.add_model_tags("p", ["cheap-model", "expensive-model"])
 
@@ -110,7 +110,7 @@ def test_missing_tariff_gives_none_cost_but_has_token_count(storage):
         storage,
         ModelTariff("no-tariff-model", "p", input_price_per_1m=1.0, output_price_per_1m=2.0),
     )
-    prompt = storage.create_prompt("p", author="qa")
+    prompt = storage.create_prompt("p")
     prompt.add_version([("user", "hello")], name="v1")
     storage.add_model_tags("p", ["no-tariff-model"])
 
@@ -139,7 +139,7 @@ def test_missing_tokenizer_falls_back_to_word_count(storage):
         ModelTariff("unknown-model", "p", input_price_per_1m=2.0, output_price_per_1m=4.0),
     )
 
-    prompt = storage.create_prompt("p", author="qa")
+    prompt = storage.create_prompt("p")
     prompt.add_version([("user", "hello world"), ("system", "be helpful")], name="v1")
     storage.add_model_tags("p", ["unknown-model"])
 
@@ -160,7 +160,7 @@ def test_missing_tokenizer_falls_back_to_word_count(storage):
 
 @pytest.mark.integration
 def test_prompt_without_model_tags_has_empty_costs(storage):
-    prompt = storage.create_prompt("p", author="qa")
+    prompt = storage.create_prompt("p")
     prompt.add_version([("user", "hello")], name="v1")
 
     data = storage.list_prompts()
@@ -179,7 +179,7 @@ def test_prompt_without_versions_has_zero_cost(storage):
         ModelTariff("some-model", "p", input_price_per_1m=5.0, output_price_per_1m=10.0),
     )
 
-    storage.create_prompt("p", author="qa")
+    storage.create_prompt("p")
     storage.add_model_tags("p", ["some-model"])
 
     data = storage.list_prompts()
@@ -201,7 +201,7 @@ def test_multiple_prompts_counted_independently(storage):
     )
 
     for i in range(3):
-        p = storage.create_prompt(f"prompt-{i}", author="qa")
+        p = storage.create_prompt(f"prompt-{i}")
         p.add_version([("user", f"content {i}")], name="v1")
         storage.add_model_tags(f"prompt-{i}", ["model-x"])
 
