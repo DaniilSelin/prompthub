@@ -1,5 +1,3 @@
-import sqlite3
-
 import pytest
 
 from prompthub.facade.storage import Storage
@@ -32,7 +30,7 @@ def test_uc02_002_requires_unique_prompt_name(tmp_path):
     try:
         storage.create_prompt("duplicate_name")
 
-        with pytest.raises((sqlite3.IntegrityError, ValueError)):
+        with pytest.raises(KeyError):
             storage.create_prompt("duplicate_name")
     finally:
         storage._conn.close()

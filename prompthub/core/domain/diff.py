@@ -2,6 +2,30 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class ChangedMessage:
+    """Сообщение, присутствующее в обеих версиях, но с изменённым content."""
+    index: int       # индекс в списке сообщений (позиция)
+    role: str        # роль сообщения (совпадает в обеих версиях)
+    old_content: str
+    new_content: str
+    line_diff: list[str] = field(default_factory=list)  # unified diff строки content
+
+
+@dataclass
+class StructuredDiff:
+    """Структурный diff между двумя версиями промпта на уровне сообщений (ВИ-7)."""
+    name_a: str
+    name_b: str
+    added: list[tuple[str, str]] = field(default_factory=list)    # (role, content) — только в name_b
+    deleted: list[tuple[str, str]] = field(default_factory=list)  # (role, content) — только в name_a
+    changed: list[ChangedMessage] = field(default_factory=list)   # изменены content при той же роли
+
+    @property
+    def has_changes(self) -> bool:
+        return bool(self.added or self.deleted or self.changed)
+
+
+@dataclass
 class VersionLineDiff:
     name_a: str
     name_b: str

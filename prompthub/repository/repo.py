@@ -357,6 +357,20 @@ class PromptRepo:
         )
         return {r["name"] for r in cur.fetchall()}
 
+    def fetch_current_prompt_tags(self, prompt_id: int) -> set[str]:
+        """Возвращает множество имён категорийных тегов, привязанных к промпту."""
+        cur = self.conn.cursor()
+        cur.execute(
+            f"""
+            SELECT t.{Fields.TAG_NAME}
+            FROM {Fields._TAG_TABLE} t
+            JOIN prompt_tags pt ON pt.tag_id = t.id
+            WHERE pt.prompt_id = ? AND t.{Fields.TAG_TYPE} = ?
+        """,
+            (prompt_id, TAG_PROMPT_TYPE),
+        )
+        return {r["name"] for r in cur.fetchall()}
+
     def delete_prompt_model_tag_links(self, prompt_id: int, tag_names: list[str]):
         for name in tag_names:
             self.remove_tag(prompt_id, name, TAG_MODEL_TYPE)

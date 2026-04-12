@@ -7,7 +7,7 @@ from prompthub.core.domain.operations import (
     DeleteOperation,
     ReplaceOperation,
 )
-from prompthub.core.domain.diff import DiffChunk, VersionDiff, VersionLineDiff
+from prompthub.core.domain.diff import DiffChunk, VersionDiff, VersionLineDiff, StructuredDiff, ChangedMessage
 
 import difflib
 import json
@@ -154,6 +154,7 @@ class Prompt(QueryFactory):
         steps_back: int | None = None,
         name_rollback_version: str = "rollback_version",
     ):
+        import warnings as _warnings
         versions = self.list_versions()
         if not versions:
             raise ValueError("Нет версий для отката")
@@ -171,11 +172,22 @@ class Prompt(QueryFactory):
         else:
             raise ValueError("Нужно указать name или steps_back")
 
-        return self.add_version(
+        latest_id = self.repo.get_latest_version(self.id)["id"]
+        result_id = self.add_version(
             content=rollback_version_content,
             name=name_rollback_version,
             message="rollback to " + target.name,
         )
+
+        # ВИ-8, альт. 7а: если содержимое целевой версии идентично актуальной
+        if result_id == latest_id:
+            _warnings.warn(
+                f"Already at target state: откат на '{target.name}' не нужен — "
+                f"содержимое идентично актуальной версии.",
+                stacklevel=2,
+            )
+
+        return result_id
 
     def _get_raw_content(self, name: str) -> str:
         v = self.repo.get_version_by_name(self.id, name)
@@ -226,9 +238,20 @@ class Prompt(QueryFactory):
         self.repo.remove_tag(self.id, model_tag.model_name, TAG_MODEL_TYPE)
 
     def add_prompt_tag(self, tag) -> None:
-        """Привязывает PromptTag (категорийный тег) к промпту."""
+        """Привязывает PromptTag (категорийный тег) к промпту.
+
+        Если тег уже привязан — выдаёт предупреждение и пропускает (ВИ-9, альт. 4а).
+        """
+        import warnings
         from prompthub.repository import TAG_PROMPT_TYPE
         value = tag.value if hasattr(tag, "value") else str(tag)
+        current = self.repo.fetch_current_prompt_tags(self.id)
+        if value in current:
+            warnings.warn(
+                f"Тег '{value}': уже привязан к промпту — пропущен",
+                stacklevel=2,
+            )
+            return
         self.repo.add_tag(self.id, value, TAG_PROMPT_TYPE)
 
     def remove_prompt_tag(self, tag) -> None:
@@ -290,6 +313,65 @@ class Prompt(QueryFactory):
         ]
 
         return VersionDiff(name_a=name_a, name_b=name_b, chunks=chunks)
+
+    def compare_versions_structured(self, name_a: str, name_b: str) -> StructuredDiff:
+        """Структурное сравнение двух версий на уровне сообщений (ВИ-7).
+
+        Возвращает StructuredDiff с:
+          - added   — сообщения, присутствующие только в name_b
+          - deleted — сообщения, присутствующие только в name_a
+          - changed — сообщения с изменённым content (при совпадении роли по позиции)
+        """
+        msgs_a = self.get_version_content(name_a)
+        msgs_b = self.get_version_content(name_b)
+
+        added: list[tuple[str, str]] = []
+        deleted: list[tuple[str, str]] = []
+        changed: list[ChangedMessage] = []
+
+        len_a, len_b = len(msgs_a), len(msgs_b)
+        common = min(len_a, len_b)
+
+        for i in range(common):
+            role_a, content_a = msgs_a[i]
+            role_b, content_b = msgs_b[i]
+
+            if role_a != role_b:
+                # Роли различаются — удаление старого, добавление нового
+                deleted.append((role_a, content_a))
+                added.append((role_b, content_b))
+            elif content_a != content_b:
+                line_diff = list(
+                    difflib.unified_diff(
+                        content_a.splitlines(keepends=True),
+                        content_b.splitlines(keepends=True),
+                        fromfile=f"{name_a}[{i}]",
+                        tofile=f"{name_b}[{i}]",
+                    )
+                )
+                changed.append(ChangedMessage(
+                    index=i,
+                    role=role_a,
+                    old_content=content_a,
+                    new_content=content_b,
+                    line_diff=line_diff,
+                ))
+
+        # Дополнительные сообщения в name_a (удалённые)
+        for role, content in msgs_a[common:]:
+            deleted.append((role, content))
+
+        # Дополнительные сообщения в name_b (добавленные)
+        for role, content in msgs_b[common:]:
+            added.append((role, content))
+
+        return StructuredDiff(
+            name_a=name_a,
+            name_b=name_b,
+            added=added,
+            deleted=deleted,
+            changed=changed,
+        )
 
     def _build_changeset(self, old: str, new: str):
         ops = []

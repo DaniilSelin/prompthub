@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(grep -r \"return -1\\\\|return.*placeholder\\\\|pass\\\\s*$\" /c/projects/prompthub/prompthub --include=\"*.py\" -B 3 -A 1)",
-      "Bash(wc -l /c/projects/prompthub/prompthub/**/*.py)",
-      "Bash(grep -r \"raise NotImplementedError\\\\|def.*:\\\\s*\\\\.\\\\.\\\\.\\\\s*$\" /c/projects/prompthub/prompthub --include=\"*.py\" -B 2)"
-    ]
-  }
-}
