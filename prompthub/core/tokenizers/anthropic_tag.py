@@ -1,26 +1,30 @@
-from prompthub.core.tokenizers.base import ModelTag
+from prompthub.core.tokenizers.base import ModelTag, Messages
 
 
 class AnthropicModelTag(ModelTag):
-    provider_key = "anthropic"
-    """Подсчёт токенов для моделей Anthropic (Claude).
+    """Подсчёт токенов для моделей Anthropic (Claude) через официальный SDK.
 
-    Anthropic не публикует свой токенизатор. Используем tiktoken с кодировкой
-    cl100k_base — это близкое приближение (погрешность ~5-10%).
+    Требует установленного пакета `anthropic` и переменной окружения
+    ANTHROPIC_API_KEY. При отсутствии любого из них get_token_count вернёт -1
+    и выдаст предупреждение (стандартное поведение базового класса).
 
-    Если установлен пакет anthropic и задан API-ключ, можно переопределить
-    _count_text для точного подсчёта через anthropic.Anthropic().count_tokens().
+    Использует messages.count_tokens — официальный API Anthropic, который
+    учитывает overhead формата (роли, разделители).
     """
+
+    provider_key = "anthropic"
 
     def __init__(self, model_name: str = "claude-3-5-sonnet-20241022"):
         super().__init__(model_name)
-        self._enc = None
 
-    def _get_enc(self):
-        if self._enc is None:
-            import tiktoken
-            self._enc = tiktoken.get_encoding("cl100k_base")
-        return self._enc
-
-    def _count_text(self, text: str) -> int:
-        return len(self._get_enc().encode(text))
+    def get_token_count(self, messages: Messages) -> int:
+        import anthropic
+        client = anthropic.Anthropic()
+        response = client.messages.count_tokens(
+            model=self.model_name,
+            messages=[
+                {"role": role, "content": content}
+                for role, content in messages
+            ],
+        )
+        return response.input_tokens

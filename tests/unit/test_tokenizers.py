@@ -118,29 +118,65 @@ class TestOpenAIModelTag:
 
 class TestAnthropicModelTag:
 
-    def test_returns_positive_int(self):
-        tag = AnthropicModelTag()
-        result = tag.get_token_count([("user", "Hello Claude!")])
-        assert isinstance(result, int)
-        assert result > 0
+    def _make_mock_anthropic(self, token_count: int):
+        mock_response = MagicMock()
+        mock_response.input_tokens = token_count
 
-    def test_encoding_is_cached(self):
-        tag = AnthropicModelTag()
-        tag.get_token_count([("user", "x")])
-        enc_ref = tag._enc
-        tag.get_token_count([("user", "y")])
-        assert tag._enc is enc_ref
+        mock_messages = MagicMock()
+        mock_messages.count_tokens.return_value = mock_response
 
-    def test_returns_minus_one_if_tiktoken_unavailable(self, monkeypatch):
-        monkeypatch.setitem(sys.modules, "tiktoken", None)
-        tag = AnthropicModelTag()
-        tag._enc = None
+        mock_client = MagicMock()
+        mock_client.messages = mock_messages
+
+        mock_anthropic = MagicMock()
+        mock_anthropic.Anthropic.return_value = mock_client
+        return mock_anthropic, mock_client
+
+    def test_calls_sdk_count_tokens(self, monkeypatch):
+        mock_anthropic, mock_client = self._make_mock_anthropic(42)
+        monkeypatch.setitem(sys.modules, "anthropic", mock_anthropic)
+
+        tag = AnthropicModelTag("claude-3-5-sonnet-20241022")
+        result = tag.get_token_count([("user", "hello"), ("assistant", "hi")])
+
+        assert result == 42
+        mock_client.messages.count_tokens.assert_called_once_with(
+            model="claude-3-5-sonnet-20241022",
+            messages=[
+                {"role": "user", "content": "hello"},
+                {"role": "assistant", "content": "hi"},
+            ],
+        )
+
+    def test_returns_minus_one_and_warns_if_sdk_unavailable(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "anthropic", None)
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            result = tag.get_token_count([("user", "hello")])
+            result = AnthropicModelTag().get_token_count([("user", "hello")])
 
         assert result == -1
+        assert len(w) == 1
+
+    def test_longer_text_produces_more_tokens(self, monkeypatch):
+        """SDK должен возвращать больше токенов для более длинного текста."""
+        call_count = [0]
+
+        def fake_count_tokens(**kwargs):
+            call_count[0] += 1
+            total_chars = sum(len(m["content"]) for m in kwargs["messages"])
+            mock_response = MagicMock()
+            mock_response.input_tokens = total_chars
+            return mock_response
+
+        mock_anthropic, mock_client = self._make_mock_anthropic(0)
+        mock_client.messages.count_tokens.side_effect = fake_count_tokens
+        monkeypatch.setitem(sys.modules, "anthropic", mock_anthropic)
+
+        tag = AnthropicModelTag()
+        short = tag.get_token_count([("user", "Hi")])
+        long = tag.get_token_count([("user", "Hi " * 50)])
+        assert long > short
 
 
 # ---------------------------------------------------------------------------
