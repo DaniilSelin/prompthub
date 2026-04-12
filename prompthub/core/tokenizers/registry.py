@@ -1,16 +1,33 @@
 import warnings
+from collections.abc import Callable
+
 from prompthub.core.tokenizers.base import ModelTag, Messages
-from prompthub.core.tokenizers.openai_tag import OpenAIModelTag
-from prompthub.core.tokenizers.anthropic_tag import AnthropicModelTag
-from prompthub.core.tokenizers.huggingface_tag import HuggingFaceModelTag
+
+
+def _load_openai_tag() -> type[ModelTag]:
+    from prompthub.core.tokenizers.openai_tag import OpenAIModelTag
+
+    return OpenAIModelTag
+
+
+def _load_anthropic_tag() -> type[ModelTag]:
+    from prompthub.core.tokenizers.anthropic_tag import AnthropicModelTag
+
+    return AnthropicModelTag
+
+
+def _load_huggingface_tag() -> type[ModelTag]:
+    from prompthub.core.tokenizers.huggingface_tag import HuggingFaceModelTag
+
+    return HuggingFaceModelTag
 
 # Неизменяемый реестр провайдеров: provider_key → класс токенизатора.
 # Для добавления нового провайдера достаточно добавить строку здесь —
 # схема БД при этом не меняется (provider хранится как TEXT).
-_PROVIDER_REGISTRY: dict[str, type[ModelTag]] = {
-    "openai": OpenAIModelTag,
-    "anthropic": AnthropicModelTag,
-    "huggingface": HuggingFaceModelTag,
+_PROVIDER_REGISTRY: dict[str, type[ModelTag] | Callable[[], type[ModelTag]]] = {
+    "openai": _load_openai_tag,
+    "anthropic": _load_anthropic_tag,
+    "huggingface": _load_huggingface_tag,
 }
 
 
@@ -19,9 +36,14 @@ def resolve_tokenizer(model_name: str, provider_key: str) -> ModelTag | None:
 
     Возвращает None, если провайдер не зарегистрирован.
     """
-    cls = _PROVIDER_REGISTRY.get(provider_key)
-    if cls is None:
+    provider = _PROVIDER_REGISTRY.get(provider_key)
+    if provider is None:
         return None
+
+    cls = provider() if callable(provider) and not isinstance(provider, type) else provider
+    if not isinstance(cls, type) or not issubclass(cls, ModelTag):
+        raise TypeError(f"Провайдер '{provider_key}' должен возвращать класс ModelTag")
+
     return cls(model_name)
 
 
