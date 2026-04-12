@@ -57,8 +57,7 @@ class Storage(QueryFactory):
             if messages is not None:
                 prompt.add_version(
                     content=messages,
-                    name="init version",
-                    message=description,
+                    description=description,
                     commit=False,
                 )
 
@@ -78,7 +77,7 @@ class Storage(QueryFactory):
     def fetch_prompt(
         self,
         name: str,
-        version: str | None = None,
+        version: int | None = None,
         adapter_type: str | None = None,
     ):
         from prompthub.core.domain.prompt_messages import PromptMessages
@@ -91,18 +90,20 @@ class Storage(QueryFactory):
         prompt = Prompt(row["id"], self.repo)
 
         if version is not None:
-            v = self.repo.get_version_by_name(row["id"], version)
+            if not isinstance(version, int):
+                raise TypeError("version должен быть целым числом (seq)")
+            v = self.repo.get_version_by_seq(row["id"], version)
             if v is None:
                 raise ValueError(f"Версия '{version}' не найдена")
-            version_name = v["name"]
+            version_seq = v["seq"]
         else:
             latest = self.repo.get_latest_version(row["id"])
             if latest is None:
                 raise ValueError(f"Промпт '{name}' не имеет версий")
-            version_name = latest["name"]
+            version_seq = latest["seq"]
 
-        content = prompt.get_version_content(version_name)
-        messages = PromptMessages(name=name, version=version_name, content=content)
+        content = prompt.get_version_content(version_seq)
+        messages = PromptMessages(name=name, version=version_seq, content=content)
 
         if adapter_type is None:
             return messages
@@ -163,10 +164,19 @@ class Storage(QueryFactory):
                 content = []
             else:
                 prompt = Prompt(prompt_id, self.repo)
-                content = prompt.get_version_content(latest["name"])
+                content = prompt.get_version_content(latest["seq"])
+
+            if not model_tag_rows:
+                entry = {
+                    **metadata,
+                    "model_tags": None,
+                    "costs": None,
+                }
+                result.append(entry)
+                continue
 
             # Токены считаем токенизатором провайдера, цену берём из тарифов
-            tariffs = self.repo.fetch_tariffs(model_tag_names) if model_tag_rows else {}
+            tariffs = self.repo.fetch_tariffs(model_tag_names)
             token_counts = count_tokens_per_model(content, model_tag_rows)
 
             costs: dict[str, dict] = {}

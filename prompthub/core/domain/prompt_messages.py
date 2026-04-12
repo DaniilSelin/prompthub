@@ -6,5 +6,5 @@ class PromptMessages:
     """Внутреннее представление промпта, готового к использованию."""
 
     name: str
-    version: str
+    version: int
     content: list[tuple[str, str]]

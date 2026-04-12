@@ -63,6 +63,17 @@ class Prompt(QueryFactory):
         return self.repo.execute(query)
 
     @staticmethod
+    def _coerce_seq(version_seq: int | str) -> int:
+        if isinstance(version_seq, int):
+            return version_seq
+        if isinstance(version_seq, str):
+            if version_seq.startswith("v") and version_seq[1:].isdigit():
+                return int(version_seq[1:])
+            if version_seq.startswith("seq-") and version_seq[4:].isdigit():
+                return int(version_seq[4:])
+        raise TypeError("version_seq должен быть целым числом")
+
+    @staticmethod
     def _validate_messages(messages: Messages):
         if not isinstance(messages, list) or not messages:
             raise ValueError("content должен быть непустым списком сообщений")
@@ -88,10 +99,15 @@ class Prompt(QueryFactory):
     def add_version(
         self,
         content: Messages,
-        name: str,
-        message: str | None = None,
+        description: str | None = None,
         commit: bool = True,
+        *,
+        name: str | None = None,
+        message: str | None = None,
     ):
+        if description is None:
+            description = message
+
         self._validate_messages(content)
         serialized = self._serialize(content)
 
@@ -101,11 +117,11 @@ class Prompt(QueryFactory):
             if latest is None:
                 return self.repo.insert_version(
                     prompt_id=self.id,
-                    name=name,
+                    name="seq-1",
                     seq=1,
                     parent_id=None,
                     snapshot_content=serialized,
-                    message=message,
+                    message=description,
                     changes=[],
                     commit=False,
                 )
@@ -121,11 +137,11 @@ class Prompt(QueryFactory):
 
             return self.repo.insert_version(
                 prompt_id=self.id,
-                name=name,
+                name=f"seq-{new_seq}",
                 seq=new_seq,
                 parent_id=latest["id"],
                 snapshot_content=snapshot,
-                message=message,
+                message=description,
                 changes=changes,
                 commit=False,
             )
@@ -155,21 +171,29 @@ class Prompt(QueryFactory):
 
         raise RuntimeError("Не удалось добавить версию из-за конкурентной записи")
 
-    def rollback_hard(self, name: str | None = None, steps_back: int | None = None):
+    def rollback_hard(
+        self,
+        target_seq: int | None = None,
+        steps_back: int | None = None,
+        name: str | None = None,
+    ):
         versions = self.list_versions()
         if not versions:
             raise ValueError("Нет версий для отката")
 
-        if name:
-            target = next((v for v in versions if v.name == name), None)
+        if target_seq is None and name is not None:
+            target_seq = self._coerce_seq(name)
+
+        if target_seq is not None:
+            target = next((v for v in versions if v.seq == target_seq), None)
             if not target:
-                raise ValueError(f"Версия {name} не найдена")
+                raise ValueError(f"Версия seq={target_seq} не найдена")
         elif steps_back is not None:
             if steps_back < 0 or steps_back >= len(versions):
                 raise ValueError(f"Некорректное количество шагов: {steps_back}")
             target = versions[-(steps_back + 1)]
         else:
-            raise ValueError("Нужно указать name или steps_back")
+            raise ValueError("Нужно указать target_seq или steps_back")
 
         for v in reversed(versions):
             if v.seq > target.seq:
@@ -179,53 +203,59 @@ class Prompt(QueryFactory):
 
     def rollback(
         self,
-        name: str | None = None,
+        target_seq: int | None = None,
         steps_back: int | None = None,
-        name_rollback_version: str = "rollback_version",
+        description: str | None = None,
+        name: str | None = None,
+        name_rollback_version: str | None = None,
     ):
         import warnings as _warnings
+
         versions = self.list_versions()
         if not versions:
             raise ValueError("Нет версий для отката")
 
-        if name:
-            target = next((v for v in versions if v.name == name), None)
+        if target_seq is None and name is not None:
+            target_seq = self._coerce_seq(name)
+
+        if target_seq is not None:
+            target = next((v for v in versions if v.seq == target_seq), None)
             if not target:
-                raise ValueError(f"Версия {name} не найдена")
-            rollback_version_content = self.get_version_content(target.name)
+                raise ValueError(f"Версия seq={target_seq} не найдена")
+            rollback_version_content = self.get_version_content(target.seq)
         elif steps_back is not None:
             if steps_back < 0 or steps_back >= len(versions):
                 raise ValueError(f"Некорректное количество шагов: {steps_back}")
             target = versions[-(steps_back + 1)]
-            rollback_version_content = self.get_version_content(target.name)
+            rollback_version_content = self.get_version_content(target.seq)
         else:
-            raise ValueError("Нужно указать name или steps_back")
+            raise ValueError("Нужно указать target_seq или steps_back")
 
         latest_id = self.repo.get_latest_version(self.id)["id"]
         result_id = self.add_version(
             content=rollback_version_content,
-            name=name_rollback_version,
-            message="rollback to " + target.name,
+            description=description or f"rollback to seq {target.seq}",
         )
 
         # ВИ-8, альт. 7а: если содержимое целевой версии идентично актуальной
         if result_id == latest_id:
             _warnings.warn(
-                f"Already at target state: откат на '{target.name}' не нужен — "
+                f"Already at target state: откат на seq={target.seq} не нужен — "
                 f"содержимое идентично актуальной версии.",
                 stacklevel=2,
             )
 
         return result_id
 
-    def _get_raw_content(self, name: str) -> str:
-        v = self.repo.get_version_by_name(self.id, name)
+    def _get_raw_content(self, version_seq: int) -> str:
+        seq = self._coerce_seq(version_seq)
+        v = self.repo.get_version_by_seq(self.id, seq)
         if not v:
             raise ValueError("version not found")
         return self._assemble(v["seq"])
 
-    def get_version_content(self, name: str) -> Messages:
-        return self._deserialize(self._get_raw_content(name))
+    def get_version_content(self, version_seq: int | str) -> Messages:
+        return self._deserialize(self._get_raw_content(version_seq))
 
     def list_versions(self) -> list["PromptVersion"]:
         rows = self.repo.list_versions(self.id)
@@ -308,24 +338,34 @@ class Prompt(QueryFactory):
 
         return content
 
-    def compare_versions(self, name_a: str, name_b: str) -> VersionLineDiff:
-        raw_a = self._get_raw_content(name_a)
-        raw_b = self._get_raw_content(name_b)
+    def compare_versions(self, seq_a: int | str, seq_b: int | str) -> VersionLineDiff:
+        seq_a = self._coerce_seq(seq_a)
+        seq_b = self._coerce_seq(seq_b)
+        raw_a = self._get_raw_content(seq_a)
+        raw_b = self._get_raw_content(seq_b)
+
+        label_a = f"seq-{seq_a}"
+        label_b = f"seq-{seq_b}"
 
         hunks = list(
             difflib.unified_diff(
                 raw_a.splitlines(keepends=True),
                 raw_b.splitlines(keepends=True),
-                fromfile=name_a,
-                tofile=name_b,
+                fromfile=label_a,
+                tofile=label_b,
             )
         )
 
-        return VersionLineDiff(name_a=name_a, name_b=name_b, hunks=hunks)
+        return VersionLineDiff(name_a=label_a, name_b=label_b, hunks=hunks)
 
-    def compare_versions_chars(self, name_a: str, name_b: str) -> VersionDiff:
-        raw_a = self._get_raw_content(name_a)
-        raw_b = self._get_raw_content(name_b)
+    def compare_versions_chars(self, seq_a: int | str, seq_b: int | str) -> VersionDiff:
+        seq_a = self._coerce_seq(seq_a)
+        seq_b = self._coerce_seq(seq_b)
+        raw_a = self._get_raw_content(seq_a)
+        raw_b = self._get_raw_content(seq_b)
+
+        label_a = f"seq-{seq_a}"
+        label_b = f"seq-{seq_b}"
 
         sm = difflib.SequenceMatcher(None, raw_a, raw_b)
         chunks = [
@@ -341,18 +381,23 @@ class Prompt(QueryFactory):
             for tag, i1, i2, j1, j2 in sm.get_opcodes()
         ]
 
-        return VersionDiff(name_a=name_a, name_b=name_b, chunks=chunks)
+        return VersionDiff(name_a=label_a, name_b=label_b, chunks=chunks)
 
-    def compare_versions_structured(self, name_a: str, name_b: str) -> StructuredDiff:
+    def compare_versions_structured(self, seq_a: int | str, seq_b: int | str) -> StructuredDiff:
         """Структурное сравнение двух версий на уровне сообщений (ВИ-7).
 
         Возвращает StructuredDiff с:
-          - added   — сообщения, присутствующие только в name_b
-          - deleted — сообщения, присутствующие только в name_a
+          - added   — сообщения, присутствующие только в seq_b
+          - deleted — сообщения, присутствующие только в seq_a
           - changed — сообщения с изменённым content (при совпадении роли по позиции)
         """
-        msgs_a = self.get_version_content(name_a)
-        msgs_b = self.get_version_content(name_b)
+        seq_a = self._coerce_seq(seq_a)
+        seq_b = self._coerce_seq(seq_b)
+        msgs_a = self.get_version_content(seq_a)
+        msgs_b = self.get_version_content(seq_b)
+
+        label_a = f"seq-{seq_a}"
+        label_b = f"seq-{seq_b}"
 
         added: list[tuple[str, str]] = []
         deleted: list[tuple[str, str]] = []
@@ -366,7 +411,6 @@ class Prompt(QueryFactory):
             role_b, content_b = msgs_b[i]
 
             if role_a != role_b:
-                # Роли различаются — удаление старого, добавление нового
                 deleted.append((role_a, content_a))
                 added.append((role_b, content_b))
             elif content_a != content_b:
@@ -374,29 +418,29 @@ class Prompt(QueryFactory):
                     difflib.unified_diff(
                         content_a.splitlines(keepends=True),
                         content_b.splitlines(keepends=True),
-                        fromfile=f"{name_a}[{i}]",
-                        tofile=f"{name_b}[{i}]",
+                        fromfile=f"{label_a}[{i}]",
+                        tofile=f"{label_b}[{i}]",
                     )
                 )
-                changed.append(ChangedMessage(
-                    index=i,
-                    role=role_a,
-                    old_content=content_a,
-                    new_content=content_b,
-                    line_diff=line_diff,
-                ))
+                changed.append(
+                    ChangedMessage(
+                        index=i,
+                        role=role_a,
+                        old_content=content_a,
+                        new_content=content_b,
+                        line_diff=line_diff,
+                    )
+                )
 
-        # Дополнительные сообщения в name_a (удалённые)
         for role, content in msgs_a[common:]:
             deleted.append((role, content))
 
-        # Дополнительные сообщения в name_b (добавленные)
         for role, content in msgs_b[common:]:
             added.append((role, content))
 
         return StructuredDiff(
-            name_a=name_a,
-            name_b=name_b,
+            name_a=label_a,
+            name_b=label_b,
             added=added,
             deleted=deleted,
             changed=changed,

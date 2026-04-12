@@ -43,7 +43,7 @@ def test_uc08_003_rollback_with_invalid_steps_back_raises_value_error(tmp_path):
 
         versions_after = prompt.list_versions()
         assert len(versions_after) == 2
-        assert [row.name for row in versions_after] == ["v1", "v2"]
+        assert [row.seq for row in versions_after] == [1, 2]
     finally:
         storage._conn.close()
 
@@ -61,10 +61,10 @@ def test_uc16_001_returns_latest_version_content(tmp_path):
             contents=expected_contents,
         )
 
-        latest_version_name = prompt.list_versions()[-1].name
-        latest_content = prompt.get_version_content(latest_version_name)
+        latest_version_seq = prompt.list_versions()[-1].seq
+        latest_content = prompt.get_version_content(latest_version_seq)
 
-        assert latest_version_name == "v3"
+        assert latest_version_seq == 3
         assert latest_content == _msg(expected_contents[-1])
     finally:
         storage._conn.close()
@@ -129,9 +129,9 @@ def test_uc16_004_reconstructs_version_with_multi_operation_changeset(tmp_path):
             SELECT COUNT(*)
             FROM prompt_changes pc
             JOIN prompt_versions pv ON pv.id = pc.version_id
-            WHERE pv.prompt_id = ? AND pv.name = ?
+            WHERE pv.prompt_id = ? AND pv.seq = ?
             """,
-            (prompt.id, "v2"),
+            (prompt.id, 2),
         ).fetchone()[0]
 
         assert changes_count >= 2
@@ -159,7 +159,7 @@ def test_uc08_004_rollback_hard_by_name_removes_later_versions(tmp_path):
 
         versions = prompt.list_versions()
         assert len(versions) == 2
-        assert [v.name for v in versions] == ["v1", "v2"]
+        assert [v.seq for v in versions] == [1, 2]
         assert prompt.get_version_content("v2") == _msg("v2 content")
     finally:
         storage._conn.close()
@@ -182,7 +182,7 @@ def test_uc08_005_rollback_hard_by_steps_removes_later_versions(tmp_path):
 
         versions = prompt.list_versions()
         assert len(versions) == 2
-        assert versions[-1].name == "v2"
+        assert versions[-1].seq == 2
         assert prompt.get_version_content("v2") == _msg("second")
     finally:
         storage._conn.close()

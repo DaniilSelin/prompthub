@@ -31,8 +31,8 @@ def test_uc07_002_compare_versions_line_diff_shows_changes(tmp_path):
         diff = prompt.compare_versions("v1", "v2")
 
         assert isinstance(diff, VersionLineDiff)
-        assert diff.name_a == "v1"
-        assert diff.name_b == "v2"
+        assert diff.name_a == "seq-1"
+        assert diff.name_b == "seq-2"
         assert diff.has_changes
         unified = diff.unified()
         assert "Hello world" in unified
@@ -72,8 +72,8 @@ def test_uc07_004_compare_versions_chars_shows_changes(tmp_path):
         diff = prompt.compare_versions_chars("v1", "v2")
 
         assert isinstance(diff, VersionDiff)
-        assert diff.name_a == "v1"
-        assert diff.name_b == "v2"
+        assert diff.name_a == "seq-1"
+        assert diff.name_b == "seq-2"
         assert diff.has_changes
         changes = diff.only_changes()
         assert len(changes) > 0

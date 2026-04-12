@@ -96,12 +96,10 @@ def test_uc08_001_rollback_by_version_name_creates_new_version_without_losing_hi
         after = prompt.list_versions()
         assert len(after) == len(before) + 1
         assert after[-1].seq == previous_latest_seq + 1
-        assert after[-1].name == "rollback_to_v1"
+        assert after[-1].name == "seq-4"
 
-        assert prompt.get_version_content(
-            "rollback_to_v1"
-        ) == prompt.get_version_content("v1")
-        assert [row.name for row in after[:-1]] == ["v1", "v2", "v3"]
+        assert prompt.get_version_content(after[-1].seq) == prompt.get_version_content(1)
+        assert [row.seq for row in after[:-1]] == [1, 2, 3]
     finally:
         storage._conn.close()
 
@@ -131,12 +129,10 @@ def test_uc08_002_rollback_by_steps_creates_new_version_without_losing_history(
         after = prompt.list_versions()
         assert len(after) == len(before) + 1
         assert after[-1].seq == previous_latest_seq + 1
-        assert after[-1].name == "rollback_steps_2"
+        assert after[-1].name == "seq-5"
 
-        assert prompt.get_version_content(
-            "rollback_steps_2"
-        ) == prompt.get_version_content("v2")
-        assert [row.name for row in after[:-1]] == ["v1", "v2", "v3", "v4"]
+        assert prompt.get_version_content(after[-1].seq) == prompt.get_version_content(2)
+        assert [row.seq for row in after[:-1]] == [1, 2, 3, 4]
     finally:
         storage._conn.close()
 

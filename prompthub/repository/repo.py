@@ -112,6 +112,18 @@ class PromptRepo:
         )
         return cur.fetchone()
 
+    def get_version_by_seq(self, prompt_id: int, seq: int):
+        cur = self.conn.cursor()
+        cur.execute(
+            f"""
+            SELECT * FROM {Fields._PROMPT_VERSIONS_TABLE}
+            WHERE {Fields.PROMPT_VERSIONS_PROMPT_ID} = ?
+              AND seq = ?
+        """,
+            (prompt_id, seq),
+        )
+        return cur.fetchone()
+
     def list_versions(self, prompt_id: int):
         cur = self.conn.cursor()
         cur.execute(
@@ -296,16 +308,17 @@ class PromptRepo:
             (prompt_id,),
         )
         last_ver = cur.fetchone()
+        model_tags = [
+            {"name": r[Fields.TAG_NAME], "provider": r[Fields.TAG_PROVIDER]}
+            for r in tags
+            if r[Fields.TAG_TYPE] == TAG_MODEL_TYPE
+        ]
         return {
             "name": prompt["name"],
             "created_at": prompt["created_at"],
             "updated_at": last_ver["created_at"] if last_ver else None,
             "tags": [r[Fields.TAG_NAME] for r in tags if r[Fields.TAG_TYPE] == TAG_PROMPT_TYPE],
-            "model_tags": [
-                {"name": r[Fields.TAG_NAME], "provider": r[Fields.TAG_PROVIDER]}
-                for r in tags
-                if r[Fields.TAG_TYPE] == TAG_MODEL_TYPE
-            ],
+            "model_tags": model_tags if model_tags else None,
         }
 
     def fetch_all_prompts(self) -> list:

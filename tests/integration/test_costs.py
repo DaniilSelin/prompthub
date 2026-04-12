@@ -205,16 +205,16 @@ def test_missing_tokenizer_falls_back_to_word_count(storage):
 
 
 # ---------------------------------------------------------------------------
-# TC-COST-05: промпт без model_tags → пустой costs
+# TC-COST-05: промпт без model_tags → costs = None
 # ---------------------------------------------------------------------------
 
 @pytest.mark.integration
-def test_prompt_without_model_tags_has_empty_costs(storage):
+def test_prompt_without_model_tags_has_none_costs(storage):
     prompt = storage.create_prompt("p")
     prompt.add_version([("user", "hello")], name="v1")
 
     data = storage.list_prompts()
-    assert data[0]["costs"] == {}
+    assert data[0]["costs"] is None
 
 
 # ---------------------------------------------------------------------------

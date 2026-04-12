@@ -28,7 +28,7 @@ def test_uc02_001_creates_prompt_and_first_version(tmp_path):
         versions = prompt.list_versions()
         assert len(versions) == 1
         assert versions[0].seq == 1
-        assert versions[0].name == "v1"
+        assert versions[0].name == "seq-1"
         assert [tuple(m) for m in json.loads(versions[0].snapshot_content)] == messages_v1
     finally:
         storage._conn.close()
