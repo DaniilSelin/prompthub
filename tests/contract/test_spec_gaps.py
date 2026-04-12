@@ -157,3 +157,43 @@ def test_uc16_004_fetch_prompt_with_adapter_type(tmp_path):
         assert result[1] == {"role": "assistant", "content": "Hi!"}
     finally:
         storage._conn.close()
+
+
+@pytest.mark.contract
+def test_uc16_005_fetch_prompt_with_unsupported_adapter_type_raises(tmp_path):
+    db_path = tmp_path / "uc16_unsupported_adapter.sqlite3"
+
+    storage = Storage(str(db_path))
+    try:
+        prompt = storage.create_prompt("prompt_bad_adapter")
+        prompt.add_version(content=[("user", "Hello")], name="v1")
+
+        with pytest.raises(ValueError, match="non_existing_adapter"):
+            storage.fetch_prompt("prompt_bad_adapter", adapter_type="non_existing_adapter")
+    finally:
+        storage._conn.close()
+
+
+@pytest.mark.contract
+def test_uc16_006_fetch_prompt_with_langchain_adapter_or_missing_module(tmp_path):
+    db_path = tmp_path / "uc16_langchain_adapter.sqlite3"
+
+    storage = Storage(str(db_path))
+    try:
+        prompt = storage.create_prompt("prompt_langchain")
+        prompt.add_version(
+            content=[("system", "You are helpful"), ("user", "Hello")],
+            name="v1",
+        )
+
+        try:
+            result = storage.fetch_prompt("prompt_langchain", adapter_type="langchain")
+        except ValueError as exc:
+            assert "модуль не установлен" in str(exc)
+        else:
+            assert isinstance(result, list)
+            assert len(result) == 2
+            assert hasattr(result[0], "content")
+            assert hasattr(result[1], "content")
+    finally:
+        storage._conn.close()

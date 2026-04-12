@@ -109,7 +109,12 @@ class Storage(QueryFactory):
             return messages
 
         adapter = get_adapter(adapter_type)
-        return adapter.convert(messages)
+        try:
+            return adapter.serialize(messages)
+        except ImportError as exc:
+            raise ValueError(
+                f"Адаптер '{adapter_type}' не поддерживается или модуль не установлен: {exc}"
+            ) from exc
 
     def get_prompt(self, name: str) -> Prompt:
         row = self.repo.get_prompt_by_name(name)
