@@ -108,7 +108,7 @@ def test_each_model_uses_own_tokenizer(storage):
     )
 
     prompt = storage.create_prompt("p")
-    prompt.add_version([("user", "hello")], name="v1")
+    prompt.add_version([("user", "hello")])
     storage.add_model_tags("p", [_Fixed100Tag("model-a"), _Fixed200Tag("model-b")])
 
     data = storage.list_prompts()
@@ -131,7 +131,7 @@ def test_cost_computed_from_own_token_count(storage):
     )
 
     prompt = storage.create_prompt("p")
-    prompt.add_version([("user", "hello")], name="v1")
+    prompt.add_version([("user", "hello")])
     storage.add_model_tags("p", [_Fixed1000Tag("cheap-model"), _Fixed500Tag("expensive-model")])
 
     data = storage.list_prompts()
@@ -155,7 +155,7 @@ def test_missing_tariff_gives_none_cost_but_has_token_count(storage):
         ModelTariff("no-tariff-model", "fixed-42", input_price_per_1m=1.0, output_price_per_1m=2.0),
     )
     prompt = storage.create_prompt("p")
-    prompt.add_version([("user", "hello")], name="v1")
+    prompt.add_version([("user", "hello")])
     storage.add_model_tags("p", [_Fixed42Tag("no-tariff-model")])
 
     # Удаляем тариф — имитируем ситуацию устаревших данных
@@ -184,7 +184,7 @@ def test_missing_tokenizer_falls_back_to_word_count(storage):
     )
 
     prompt = storage.create_prompt("p")
-    prompt.add_version([("user", "hello world"), ("system", "be helpful")], name="v1")
+    prompt.add_version([("user", "hello world"), ("system", "be helpful")])
 
     # Создаём ModelTag с неизвестным провайдером для теста
     class _UnknownProviderTag(ModelTag):
@@ -211,7 +211,7 @@ def test_missing_tokenizer_falls_back_to_word_count(storage):
 @pytest.mark.integration
 def test_prompt_without_model_tags_has_none_costs(storage):
     prompt = storage.create_prompt("p")
-    prompt.add_version([("user", "hello")], name="v1")
+    prompt.add_version([("user", "hello")])
 
     data = storage.list_prompts()
     assert data[0]["costs"] is None
@@ -250,7 +250,7 @@ def test_multiple_prompts_counted_independently(storage):
 
     for i in range(3):
         p = storage.create_prompt(f"prompt-{i}")
-        p.add_version([("user", f"content {i}")], name="v1")
+        p.add_version([("user", f"content {i}")])
         storage.add_model_tags(f"prompt-{i}", [_Fixed10Tag("model-x")])
 
     data = storage.list_prompts()

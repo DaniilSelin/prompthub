@@ -16,8 +16,7 @@ def _create_prompt_with_versions(
     for seq, content in enumerate(contents, start=1):
         prompt.add_version(
             content=_msg(content),
-            name=f"v{seq}",
-            message=f"version {seq}",
+            description=f"version {seq}",
         )
 
     return prompt
@@ -91,8 +90,8 @@ def test_uc16_002_reconstructs_content_from_snapshot_and_delta_chain(tmp_path):
             contents=contents,
         )
 
-        v6_content = prompt.get_version_content("v6")
-        v7_content = prompt.get_version_content("v7")
+        v6_content = prompt.get_version_content(6)
+        v7_content = prompt.get_version_content(7)
 
         assert v6_content == _msg(contents[5])
         assert v7_content == _msg(contents[6])
@@ -121,8 +120,8 @@ def test_uc16_004_reconstructs_version_with_multi_operation_changeset(tmp_path):
     storage = Storage(str(db_path))
     try:
         prompt = storage.create_prompt("prompt_multi_ops")
-        prompt.add_version(content=_msg("abc123"), name="v1")
-        prompt.add_version(content=_msg("x_bc!23z"), name="v2")
+        prompt.add_version(content=_msg("abc123"))
+        prompt.add_version(content=_msg("x_bc!23z"))
 
         changes_count = storage._conn.execute(
             """
@@ -135,7 +134,7 @@ def test_uc16_004_reconstructs_version_with_multi_operation_changeset(tmp_path):
         ).fetchone()[0]
 
         assert changes_count >= 2
-        assert prompt.get_version_content("v2") == _msg("x_bc!23z")
+        assert prompt.get_version_content(2) == _msg("x_bc!23z")
     finally:
         storage._conn.close()
 
@@ -155,12 +154,12 @@ def test_uc08_004_rollback_hard_by_name_removes_later_versions(tmp_path):
 
         assert len(prompt.list_versions()) == 4
 
-        prompt.rollback_hard(name="v2")
+        prompt.rollback_hard(target_seq=2)
 
         versions = prompt.list_versions()
         assert len(versions) == 2
         assert [v.seq for v in versions] == [1, 2]
-        assert prompt.get_version_content("v2") == _msg("v2 content")
+        assert prompt.get_version_content(2) == _msg("v2 content")
     finally:
         storage._conn.close()
 
@@ -183,7 +182,7 @@ def test_uc08_005_rollback_hard_by_steps_removes_later_versions(tmp_path):
         versions = prompt.list_versions()
         assert len(versions) == 2
         assert versions[-1].seq == 2
-        assert prompt.get_version_content("v2") == _msg("second")
+        assert prompt.get_version_content(2) == _msg("second")
     finally:
         storage._conn.close()
 
@@ -202,7 +201,7 @@ def test_uc08_006_rollback_hard_raises_for_unknown_name(tmp_path):
         )
 
         with pytest.raises(ValueError):
-            prompt.rollback_hard(name="v999")
+            prompt.rollback_hard(target_seq=999)
     finally:
         storage._conn.close()
 
@@ -220,7 +219,7 @@ def test_uc16_003_raises_error_for_unknown_version_name(tmp_path):
         )
 
         with pytest.raises(ValueError, match="version not found"):
-            prompt.get_version_content("v999")
+            prompt.get_version_content(999)
     finally:
         storage._conn.close()
 
@@ -232,7 +231,7 @@ def test_uc03_005_concurrent_add_version_keeps_unique_seq(tmp_path):
     bootstrap = Storage(str(db_path))
     try:
         prompt = bootstrap.create_prompt("concurrent_prompt")
-        prompt.add_version(content=_msg("base"), name="v1")
+        prompt.add_version(content=_msg("base"))
     finally:
         bootstrap._conn.close()
 
@@ -240,7 +239,7 @@ def test_uc03_005_concurrent_add_version_keeps_unique_seq(tmp_path):
         s = Storage(str(db_path))
         try:
             p = s.get_prompt("concurrent_prompt")
-            p.add_version(content=_msg(f"content-{i}"), name=f"w{i}")
+            p.add_version(content=_msg(f"content-{i}"))
         finally:
             s._conn.close()
 

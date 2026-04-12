@@ -16,7 +16,7 @@ def storage(tmp_path):
 def test_uc11_002_delete_last_remaining_version_raises_error(storage):
     """Удаление единственной версии промпта должно блокироваться."""
     prompt = storage.create_prompt("last_version_test")
-    version_id = prompt.add_version([("user", "only one version")], name="v1")
+    version_id = prompt.add_version([("user", "only one version")])
 
     with pytest.raises(ValueError, match="Нельзя удалить единственную версию"):
         storage.repo.delete_version(version_id)
@@ -51,8 +51,8 @@ def test_uc13_003_global_tags_persistence_contract(storage):
 @pytest.mark.contract
 def test_uc13_004_delete_prompt_cleans_versions_metadata(storage):
     prompt = storage.create_prompt("clean_test")
-    prompt.add_version([("user", "v1 content")], name="v1")
-    prompt.add_version([("user", "v2 content")], name="v2")
+    prompt.add_version([("user", "v1 content")])
+    prompt.add_version([("user", "v2 content")])
     p_id = prompt.id
 
     storage.repo.delete_prompt(p_id)

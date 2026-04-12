@@ -56,7 +56,7 @@ def test_uc01_001_creates_new_db_schema_and_configures_pragmas(tmp_path):
 def test_uc01_002_reinitialization_preserves_existing_data(tmp_path):
     db_path = tmp_path / "storage_reinit.sqlite3"
     prompt_name = "prompt_reinit"
-    version_name = "v1"
+    version_seq = 1
     content = [("user", "Hello, world!")]
 
     storage = Storage(str(db_path))
@@ -64,19 +64,18 @@ def test_uc01_002_reinitialization_preserves_existing_data(tmp_path):
         prompt = storage.create_prompt(prompt_name)
         prompt.add_version(
             content=content,
-            name=version_name,
-            message="initial version",
+            description="initial version",
         )
 
         existing_prompt = storage.get_prompt(prompt_name)
-        assert existing_prompt.get_version_content(version_name) == content
+        assert existing_prompt.get_version_content(version_seq) == content
     finally:
         storage._conn.close()
 
     reinitialized_storage = Storage(str(db_path))
     try:
         restored_prompt = reinitialized_storage.get_prompt(prompt_name)
-        assert restored_prompt.get_version_content(version_name) == content
+        assert restored_prompt.get_version_content(version_seq) == content
 
         versions = restored_prompt.list_versions()
         assert len(versions) == 1

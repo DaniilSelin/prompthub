@@ -19,8 +19,7 @@ def test_uc02_001_creates_prompt_and_first_version(tmp_path):
         prompt = storage.create_prompt("welcome_prompt")
         version_id = prompt.add_version(
             content=messages_v1,
-            name="v1",
-            message="initial",
+            description="initial",
         )
 
         assert isinstance(version_id, int)
@@ -86,14 +85,12 @@ def test_uc03_001_adds_new_version_increments_seq_and_sets_parent(tmp_path):
         prompt = storage.create_prompt("editable_prompt")
         first_version_id = prompt.add_version(
             content=[("user", "Hello")],
-            name="v1",
-            message="initial",
+            description="initial",
         )
 
         second_version_id = prompt.add_version(
             content=[("user", "Hello, world")],
-            name="v2",
-            message="update",
+            description="update",
         )
 
         versions = prompt.list_versions()
@@ -127,8 +124,7 @@ def test_uc03_003_stores_snapshot_every_snapshot_interval(tmp_path):
         for seq in range(1, 6):
             prompt.add_version(
                 content=[("user", f"content v{seq}")],
-                name=f"v{seq}",
-                message=f"change {seq}",
+                description=f"change {seq}",
             )
 
         rows = storage._conn.execute(

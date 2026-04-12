@@ -63,17 +63,6 @@ class Prompt(QueryFactory):
         return self.repo.execute(query)
 
     @staticmethod
-    def _coerce_seq(version_seq: int | str) -> int:
-        if isinstance(version_seq, int):
-            return version_seq
-        if isinstance(version_seq, str):
-            if version_seq.startswith("v") and version_seq[1:].isdigit():
-                return int(version_seq[1:])
-            if version_seq.startswith("seq-") and version_seq[4:].isdigit():
-                return int(version_seq[4:])
-        raise TypeError("version_seq должен быть целым числом")
-
-    @staticmethod
     def _validate_messages(messages: Messages):
         if not isinstance(messages, list) or not messages:
             raise ValueError("content должен быть непустым списком сообщений")
@@ -101,13 +90,7 @@ class Prompt(QueryFactory):
         content: Messages,
         description: str | None = None,
         commit: bool = True,
-        *,
-        name: str | None = None,
-        message: str | None = None,
     ):
-        if description is None:
-            description = message
-
         self._validate_messages(content)
         serialized = self._serialize(content)
 
@@ -175,14 +158,10 @@ class Prompt(QueryFactory):
         self,
         target_seq: int | None = None,
         steps_back: int | None = None,
-        name: str | None = None,
     ):
         versions = self.list_versions()
         if not versions:
             raise ValueError("Нет версий для отката")
-
-        if target_seq is None and name is not None:
-            target_seq = self._coerce_seq(name)
 
         if target_seq is not None:
             target = next((v for v in versions if v.seq == target_seq), None)
@@ -206,17 +185,12 @@ class Prompt(QueryFactory):
         target_seq: int | None = None,
         steps_back: int | None = None,
         description: str | None = None,
-        name: str | None = None,
-        name_rollback_version: str | None = None,
     ):
         import warnings as _warnings
 
         versions = self.list_versions()
         if not versions:
             raise ValueError("Нет версий для отката")
-
-        if target_seq is None and name is not None:
-            target_seq = self._coerce_seq(name)
 
         if target_seq is not None:
             target = next((v for v in versions if v.seq == target_seq), None)
@@ -248,13 +222,15 @@ class Prompt(QueryFactory):
         return result_id
 
     def _get_raw_content(self, version_seq: int) -> str:
-        seq = self._coerce_seq(version_seq)
-        v = self.repo.get_version_by_seq(self.id, seq)
+        if not isinstance(version_seq, int):
+            raise TypeError("version_seq должен быть целым числом")
+
+        v = self.repo.get_version_by_seq(self.id, version_seq)
         if not v:
             raise ValueError("version not found")
         return self._assemble(v["seq"])
 
-    def get_version_content(self, version_seq: int | str) -> Messages:
+    def get_version_content(self, version_seq: int) -> Messages:
         return self._deserialize(self._get_raw_content(version_seq))
 
     def list_versions(self) -> list["PromptVersion"]:
@@ -338,9 +314,7 @@ class Prompt(QueryFactory):
 
         return content
 
-    def compare_versions(self, seq_a: int | str, seq_b: int | str) -> VersionLineDiff:
-        seq_a = self._coerce_seq(seq_a)
-        seq_b = self._coerce_seq(seq_b)
+    def compare_versions(self, seq_a: int, seq_b: int) -> VersionLineDiff:
         raw_a = self._get_raw_content(seq_a)
         raw_b = self._get_raw_content(seq_b)
 
@@ -358,9 +332,7 @@ class Prompt(QueryFactory):
 
         return VersionLineDiff(name_a=label_a, name_b=label_b, hunks=hunks)
 
-    def compare_versions_chars(self, seq_a: int | str, seq_b: int | str) -> VersionDiff:
-        seq_a = self._coerce_seq(seq_a)
-        seq_b = self._coerce_seq(seq_b)
+    def compare_versions_chars(self, seq_a: int, seq_b: int) -> VersionDiff:
         raw_a = self._get_raw_content(seq_a)
         raw_b = self._get_raw_content(seq_b)
 
@@ -383,7 +355,7 @@ class Prompt(QueryFactory):
 
         return VersionDiff(name_a=label_a, name_b=label_b, chunks=chunks)
 
-    def compare_versions_structured(self, seq_a: int | str, seq_b: int | str) -> StructuredDiff:
+    def compare_versions_structured(self, seq_a: int, seq_b: int) -> StructuredDiff:
         """Структурное сравнение двух версий на уровне сообщений (ВИ-7).
 
         Возвращает StructuredDiff с:
@@ -391,8 +363,6 @@ class Prompt(QueryFactory):
           - deleted — сообщения, присутствующие только в seq_a
           - changed — сообщения с изменённым content (при совпадении роли по позиции)
         """
-        seq_a = self._coerce_seq(seq_a)
-        seq_b = self._coerce_seq(seq_b)
         msgs_a = self.get_version_content(seq_a)
         msgs_b = self.get_version_content(seq_b)
 

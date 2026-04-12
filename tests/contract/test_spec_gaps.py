@@ -15,8 +15,7 @@ def _create_prompt_with_versions(
     for seq, content in enumerate(contents, start=1):
         prompt.add_version(
             content=_msg(content),
-            name=f"v{seq}",
-            message=f"version {seq}",
+            description=f"version {seq}",
         )
 
     return prompt
@@ -45,8 +44,7 @@ def test_uc03_004_update_with_identical_content_does_not_create_new_version(tmp_
         prompt = storage.create_prompt("no_change_prompt")
         v1_id = prompt.add_version(
             content=[("user", "stable content")],
-            name="v1",
-            message="initial",
+            description="initial",
         )
 
         before_count = storage._conn.execute(
@@ -56,8 +54,7 @@ def test_uc03_004_update_with_identical_content_does_not_create_new_version(tmp_
 
         returned_id = prompt.add_version(
             content=[("user", "stable content")],
-            name="v2",
-            message="should be ignored",
+            description="should be ignored",
         )
 
         after_count = storage._conn.execute(
@@ -88,10 +85,7 @@ def test_uc08_001_rollback_by_version_name_creates_new_version_without_losing_hi
         before = prompt.list_versions()
         previous_latest_seq = before[-1].seq
 
-        prompt.rollback(
-            name="v1",
-            name_rollback_version="rollback_to_v1",
-        )
+        prompt.rollback(target_seq=1)
 
         after = prompt.list_versions()
         assert len(after) == len(before) + 1
@@ -121,10 +115,7 @@ def test_uc08_002_rollback_by_steps_creates_new_version_without_losing_history(
         before = prompt.list_versions()
         previous_latest_seq = before[-1].seq
 
-        prompt.rollback(
-            steps_back=2,
-            name_rollback_version="rollback_steps_2",
-        )
+        prompt.rollback(steps_back=2)
 
         after = prompt.list_versions()
         assert len(after) == len(before) + 1
@@ -146,8 +137,7 @@ def test_uc16_004_fetch_prompt_with_adapter_type(tmp_path):
         prompt = storage.create_prompt("prompt_adapter")
         prompt.add_version(
             content=[("user", "Hello"), ("assistant", "Hi!")],
-            name="v1",
-            message="initial",
+            description="initial",
         )
 
         result = storage.fetch_prompt("prompt_adapter", adapter_type="openai")
@@ -166,7 +156,7 @@ def test_uc16_005_fetch_prompt_with_unsupported_adapter_type_raises(tmp_path):
     storage = Storage(str(db_path))
     try:
         prompt = storage.create_prompt("prompt_bad_adapter")
-        prompt.add_version(content=[("user", "Hello")], name="v1")
+        prompt.add_version(content=[("user", "Hello")])
 
         with pytest.raises(ValueError, match="non_existing_adapter"):
             storage.fetch_prompt("prompt_bad_adapter", adapter_type="non_existing_adapter")
@@ -183,7 +173,7 @@ def test_uc16_006_fetch_prompt_with_langchain_adapter_or_missing_module(tmp_path
         prompt = storage.create_prompt("prompt_langchain")
         prompt.add_version(
             content=[("system", "You are helpful"), ("user", "Hello")],
-            name="v1",
+            description="initial",
         )
 
         try:

@@ -44,7 +44,7 @@ def test_uc05_002_list_prompts_includes_per_model_token_count_and_cost(storage):
     ])
 
     prompt = storage.create_prompt("priced_prompt")
-    prompt.add_version([("user", "hello world")], name="v1")
+    prompt.add_version([("user", "hello world")])
     storage.add_model_tags("priced_prompt", [OpenAIModelTag("gpt-4o")])
 
     data = storage.list_prompts()
@@ -65,8 +65,8 @@ def test_uc05_002_list_prompts_includes_per_model_token_count_and_cost(storage):
 def test_uc06_001_version_history_order_and_fields(storage):
     """Позитивный: Проверка порядка версий (по seq) и наличия описания."""
     prompt = storage.create_prompt("history_test")
-    prompt.add_version([("user", "ver 1")], name="v1", message="first commit")
-    prompt.add_version([("user", "ver 2")], name="v2", message="second commit")
+    prompt.add_version([("user", "ver 1")], description="first commit")
+    prompt.add_version([("user", "ver 2")], description="second commit")
 
     history = prompt.list_versions()
 
@@ -79,7 +79,7 @@ def test_uc06_001_version_history_order_and_fields(storage):
 def test_uc06_002_history_after_prompt_deletion(storage):
     """Граничный: Проверка, что версии удаляются вместе с промптом (каскад)."""
     prompt = storage.create_prompt("to_delete")
-    prompt.add_version([("user", "content")], name="v1")
+    prompt.add_version([("user", "content")])
     prompt_id = prompt.id
 
     storage.repo.delete_prompt(prompt_id)
@@ -96,8 +96,8 @@ def test_uc06_002_history_after_prompt_deletion(storage):
 def test_uc07_001_changeset_storage_integrity(storage):
     """Интеграционный: Проверка, что дельты физически записываются в prompt_changes."""
     prompt = storage.create_prompt("diff_test")
-    prompt.add_version([("user", "Line 1")], name="v1")
-    prompt.add_version([("user", "Line 1\nLine 2")], name="v2")
+    prompt.add_version([("user", "Line 1")])
+    prompt.add_version([("user", "Line 1\nLine 2")])
 
     changes = storage._conn.execute(
         """
@@ -117,10 +117,10 @@ def test_uc07_001_changeset_storage_integrity(storage):
 def test_uc07_002_compare_versions_returns_structured_diff(storage):
     """compare_versions_chars возвращает VersionDiff с изменёнными чанками."""
     prompt = storage.create_prompt("api_test")
-    prompt.add_version([("user", "old content")], name="v1")
-    prompt.add_version([("user", "new content")], name="v2")
+    prompt.add_version([("user", "old content")])
+    prompt.add_version([("user", "new content")])
 
-    diff = prompt.compare_versions_chars("v1", "v2")
+    diff = prompt.compare_versions_chars(1, 2)
 
     assert isinstance(diff, VersionDiff)
     assert diff.has_changes
