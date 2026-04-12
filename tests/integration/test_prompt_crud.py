@@ -52,6 +52,29 @@ def test_uc02_003_prompt_metadata_created_at_is_stored(tmp_path):
         storage._conn.close()
 
 
+@pytest.mark.integration
+def test_uc02_004_create_prompt_rolls_back_on_initial_version_failure(tmp_path, monkeypatch):
+    db_path = tmp_path / "uc02_atomic_create.sqlite3"
+
+    storage = Storage(str(db_path))
+    try:
+        def _fail_add_version(*args, **kwargs):
+            raise RuntimeError("forced failure")
+
+        monkeypatch.setattr("prompthub.facade.prompt.Prompt.add_version", _fail_add_version)
+
+        with pytest.raises(RuntimeError, match="forced failure"):
+            storage.create_prompt(
+                "atomic_prompt",
+                messages=[("user", "hello")],
+                description="initial",
+            )
+
+        assert storage.repo.get_prompt_by_name("atomic_prompt") is None
+    finally:
+        storage._conn.close()
+
+
 
 
 @pytest.mark.integration

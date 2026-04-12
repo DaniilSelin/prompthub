@@ -48,21 +48,32 @@ class Storage(QueryFactory):
         """
         if self.repo.get_prompt_by_name(name):
             raise KeyError(f"Промпт '{name}' уже существует")
+        try:
+            self._conn.execute("BEGIN")
 
-        prompt_id = self.repo.create_prompt(name)
-        prompt = Prompt(prompt_id, self.repo)
+            prompt_id = self.repo.create_prompt(name, commit=False)
+            prompt = Prompt(prompt_id, self.repo)
 
-        if messages is not None:
-            prompt.add_version(content=messages, name="init version", message=description)
+            if messages is not None:
+                prompt.add_version(
+                    content=messages,
+                    name="init version",
+                    message=description,
+                    commit=False,
+                )
 
-        if tags:
-            for tag in tags:
-                prompt.add_prompt_tag(tag)
+            if tags:
+                for tag in tags:
+                    prompt.add_prompt_tag(tag, commit=False)
 
-        if model_tags:
-            self.add_model_tags(name, model_tags)
+            if model_tags:
+                self.add_model_tags(name, model_tags, commit=False)
 
-        return prompt
+            self._conn.commit()
+            return prompt
+        except Exception:
+            self._conn.rollback()
+            raise
 
     def fetch_prompt(
         self,
@@ -208,7 +219,7 @@ class Storage(QueryFactory):
         all_tariffs = gateway.fetch_pricing_data()  # ConnectionError / ValueError
         return TariffManager(self._conn).bulk_upsert(all_tariffs)  # RuntimeError при ошибке БД
 
-    def remove_model_tags(self, name: str, model_tags: list) -> list[str]:
+    def remove_model_tags(self, name: str, model_tags: list, commit: bool = True) -> list[str]:
         """Отвязывает ModelTag-объекты от промпта. Возвращает список отвязанных имён."""
         row = self.repo.get_prompt_by_name(name)
         if not row:
@@ -226,11 +237,11 @@ class Storage(QueryFactory):
                 to_remove.append(tag_name)
 
         if to_remove:
-            self.repo.delete_prompt_model_tag_links(prompt_id, to_remove)
+            self.repo.delete_prompt_model_tag_links(prompt_id, to_remove, commit=commit)
 
         return to_remove
 
-    def add_model_tags(self, name: str, model_tags: list) -> list[str]:
+    def add_model_tags(self, name: str, model_tags: list, commit: bool = True) -> list[str]:
         """Привязывает ModelTag-объекты к промпту. Возвращает список добавленных имён.
 
         Пропускает теги с предупреждением если (ВИ-11, альт. 3а):
@@ -262,6 +273,6 @@ class Storage(QueryFactory):
                 to_add.append({"name": tag_name, "provider": type(mt).provider_key})
 
         if to_add:
-            self.repo.create_prompt_model_tag_links(prompt_id, to_add)
+            self.repo.create_prompt_model_tag_links(prompt_id, to_add, commit=commit)
 
         return [t["name"] for t in to_add]

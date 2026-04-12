@@ -89,6 +89,7 @@ class Prompt(QueryFactory):
         content: Messages,
         name: str,
         message: str | None = None,
+        commit: bool = True,
     ):
         self._validate_messages(content)
         serialized = self._serialize(content)
@@ -104,6 +105,7 @@ class Prompt(QueryFactory):
                 snapshot_content=serialized,
                 message=message,
                 changes=[],
+                commit=commit,
             )
 
         prev_raw = self._assemble(latest["seq"])
@@ -124,6 +126,7 @@ class Prompt(QueryFactory):
             snapshot_content=snapshot,
             message=message,
             changes=changes,
+            commit=commit,
         )
 
     def rollback_hard(self, name: str | None = None, steps_back: int | None = None):
@@ -237,7 +240,7 @@ class Prompt(QueryFactory):
         from prompthub.repository import TAG_MODEL_TYPE
         self.repo.remove_tag(self.id, model_tag.model_name, TAG_MODEL_TYPE)
 
-    def add_prompt_tag(self, tag) -> None:
+    def add_prompt_tag(self, tag, commit: bool = True) -> None:
         """Привязывает PromptTag (категорийный тег) к промпту.
 
         Если тег уже привязан — выдаёт предупреждение и пропускает (ВИ-9, альт. 4а).
@@ -252,13 +255,13 @@ class Prompt(QueryFactory):
                 stacklevel=2,
             )
             return
-        self.repo.add_tag(self.id, value, TAG_PROMPT_TYPE)
+        self.repo.add_tag(self.id, value, TAG_PROMPT_TYPE, commit=commit)
 
-    def remove_prompt_tag(self, tag) -> None:
+    def remove_prompt_tag(self, tag, commit: bool = True) -> None:
         """Отвязывает PromptTag от промпта."""
         from prompthub.repository import TAG_PROMPT_TYPE
         value = tag.value if hasattr(tag, "value") else str(tag)
-        self.repo.remove_tag(self.id, value, TAG_PROMPT_TYPE)
+        self.repo.remove_tag(self.id, value, TAG_PROMPT_TYPE, commit=commit)
 
     def _assemble(self, target_seq: int) -> str:
         snapshot = self.repo.get_nearest_snapshot(self.id, target_seq)

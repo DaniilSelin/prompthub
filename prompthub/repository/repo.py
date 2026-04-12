@@ -31,7 +31,7 @@ class PromptRepo:
         self.conn.commit()
         return cur.rowcount
 
-    def create_prompt(self, name: str) -> int:
+    def create_prompt(self, name: str, commit: bool = True) -> int:
         cur = self.conn.cursor()
 
         cur.execute(
@@ -43,7 +43,8 @@ class PromptRepo:
             (name, SNAPSHOT_INTERVAL),
         )
 
-        self.conn.commit()
+        if commit:
+            self.conn.commit()
         return cur.lastrowid
 
     def get_prompt_by_name(self, name: str):
@@ -133,6 +134,7 @@ class PromptRepo:
         snapshot_content: str | None,
         message: str | None,
         changes: list[Operation],
+        commit: bool = True,
     ):
         cur = self.conn.cursor()
 
@@ -152,7 +154,8 @@ class PromptRepo:
         for i, op in enumerate(changes):
             self._insert_change(version_id, i, op)
 
-        self.conn.commit()
+        if commit:
+            self.conn.commit()
         return version_id
 
     def delete_version(self, version_id: int):
@@ -371,16 +374,20 @@ class PromptRepo:
         )
         return {r["name"] for r in cur.fetchall()}
 
-    def delete_prompt_model_tag_links(self, prompt_id: int, tag_names: list[str]):
+    def delete_prompt_model_tag_links(self, prompt_id: int, tag_names: list[str], commit: bool = True):
         for name in tag_names:
-            self.remove_tag(prompt_id, name, TAG_MODEL_TYPE)
+            self.remove_tag(prompt_id, name, TAG_MODEL_TYPE, commit=False)
+        if commit:
+            self.conn.commit()
 
     def create_prompt_model_tag_links(
-        self, prompt_id: int, tags: list[dict]
+        self, prompt_id: int, tags: list[dict], commit: bool = True
     ):
         """tags — список словарей {"name": ..., "provider": ...}"""
         for tag in tags:
-            self.add_tag(prompt_id, tag["name"], TAG_MODEL_TYPE, tag.get("provider"))
+            self.add_tag(prompt_id, tag["name"], TAG_MODEL_TYPE, tag.get("provider"), commit=False)
+        if commit:
+            self.conn.commit()
 
     def add_tag(
         self,
@@ -388,6 +395,7 @@ class PromptRepo:
         tag_name: str,
         tag_type: str,
         provider: str | None = None,
+        commit: bool = True,
     ):
         cur = self.conn.cursor()
 
@@ -409,9 +417,10 @@ class PromptRepo:
             (prompt_id, tag_name, tag_type),
         )
 
-        self.conn.commit()
+        if commit:
+            self.conn.commit()
 
-    def remove_tag(self, prompt_id: int, tag_name: str, tag_type: str):
+    def remove_tag(self, prompt_id: int, tag_name: str, tag_type: str, commit: bool = True):
         cur = self.conn.cursor()
 
         cur.execute(
@@ -426,4 +435,5 @@ class PromptRepo:
             (prompt_id, tag_name, tag_type),
         )
 
-        self.conn.commit()
+        if commit:
+            self.conn.commit()
