@@ -114,6 +114,32 @@ def test_uc16_002_reconstructs_content_from_snapshot_and_delta_chain(tmp_path):
 
 
 @pytest.mark.integration
+def test_uc16_004_reconstructs_version_with_multi_operation_changeset(tmp_path):
+    db_path = tmp_path / "uc16_multi_ops.sqlite3"
+
+    storage = Storage(str(db_path))
+    try:
+        prompt = storage.create_prompt("prompt_multi_ops")
+        prompt.add_version(content=_msg("abc123"), name="v1")
+        prompt.add_version(content=_msg("x_bc!23z"), name="v2")
+
+        changes_count = storage._conn.execute(
+            """
+            SELECT COUNT(*)
+            FROM prompt_changes pc
+            JOIN prompt_versions pv ON pv.id = pc.version_id
+            WHERE pv.prompt_id = ? AND pv.name = ?
+            """,
+            (prompt.id, "v2"),
+        ).fetchone()[0]
+
+        assert changes_count >= 2
+        assert prompt.get_version_content("v2") == _msg("x_bc!23z")
+    finally:
+        storage._conn.close()
+
+
+@pytest.mark.integration
 def test_uc08_004_rollback_hard_by_name_removes_later_versions(tmp_path):
     """TC-UC08-004: rollback_hard по имени удаляет версии после целевой."""
     db_path = tmp_path / "uc08_hard_by_name.sqlite3"
