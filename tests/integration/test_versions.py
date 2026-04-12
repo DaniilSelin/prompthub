@@ -1,4 +1,5 @@
 import pytest
+from concurrent.futures import ThreadPoolExecutor
 
 from prompthub.facade.storage import Storage
 
@@ -222,3 +223,38 @@ def test_uc16_003_raises_error_for_unknown_version_name(tmp_path):
             prompt.get_version_content("v999")
     finally:
         storage._conn.close()
+
+
+@pytest.mark.integration
+def test_uc03_005_concurrent_add_version_keeps_unique_seq(tmp_path):
+    db_path = tmp_path / "uc03_concurrent.sqlite3"
+
+    bootstrap = Storage(str(db_path))
+    try:
+        prompt = bootstrap.create_prompt("concurrent_prompt")
+        prompt.add_version(content=_msg("base"), name="v1")
+    finally:
+        bootstrap._conn.close()
+
+    def _worker(i: int):
+        s = Storage(str(db_path))
+        try:
+            p = s.get_prompt("concurrent_prompt")
+            p.add_version(content=_msg(f"content-{i}"), name=f"w{i}")
+        finally:
+            s._conn.close()
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = [pool.submit(_worker, i) for i in range(2, 10)]
+        for f in futures:
+            f.result()
+
+    check = Storage(str(db_path))
+    try:
+        prompt = check.get_prompt("concurrent_prompt")
+        seqs = [v.seq for v in prompt.list_versions()]
+
+        assert len(seqs) == len(set(seqs))
+        assert sorted(seqs) == list(range(1, len(seqs) + 1))
+    finally:
+        check._conn.close()

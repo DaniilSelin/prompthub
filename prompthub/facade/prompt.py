@@ -11,6 +11,7 @@ from prompthub.core.domain.diff import DiffChunk, VersionDiff, VersionLineDiff, 
 
 import difflib
 import json
+import sqlite3
 
 Messages = list[tuple[str, str]]
 
@@ -94,40 +95,65 @@ class Prompt(QueryFactory):
         self._validate_messages(content)
         serialized = self._serialize(content)
 
-        latest = self.repo.get_latest_version(self.id)
+        def _insert_once() -> int:
+            latest = self.repo.get_latest_version(self.id)
 
-        if latest is None:
+            if latest is None:
+                return self.repo.insert_version(
+                    prompt_id=self.id,
+                    name=name,
+                    seq=1,
+                    parent_id=None,
+                    snapshot_content=serialized,
+                    message=message,
+                    changes=[],
+                    commit=False,
+                )
+
+            prev_raw = self._assemble(latest["seq"])
+
+            if prev_raw == serialized:
+                return latest["id"]
+
+            changes = self._build_changeset(prev_raw, serialized)
+            new_seq = latest["seq"] + 1
+            snapshot = serialized if new_seq % self.snapshot_interval == 0 else None
+
             return self.repo.insert_version(
                 prompt_id=self.id,
                 name=name,
-                seq=1,
-                parent_id=None,
-                snapshot_content=serialized,
+                seq=new_seq,
+                parent_id=latest["id"],
+                snapshot_content=snapshot,
                 message=message,
-                changes=[],
-                commit=commit,
+                changes=changes,
+                commit=False,
             )
 
-        prev_raw = self._assemble(latest["seq"])
+        if not commit:
+            return _insert_once()
 
-        if prev_raw == serialized:
-            return latest["id"]
+        # Если транзакция уже открыта выше по стеку — не начинаем новую.
+        if self.repo.conn.in_transaction:
+            return _insert_once()
 
-        changes = self._build_changeset(prev_raw, serialized)
-        new_seq = latest["seq"] + 1
+        for _ in range(3):
+            try:
+                self.repo.conn.execute("BEGIN IMMEDIATE")
+                version_id = _insert_once()
+                self.repo.conn.commit()
+                return version_id
+            except sqlite3.IntegrityError:
+                self.repo.conn.rollback()
+            except sqlite3.OperationalError as e:
+                self.repo.conn.rollback()
+                if "locked" not in str(e).lower():
+                    raise
+            except Exception:
+                self.repo.conn.rollback()
+                raise
 
-        snapshot = serialized if new_seq % self.snapshot_interval == 0 else None
-
-        return self.repo.insert_version(
-            prompt_id=self.id,
-            name=name,
-            seq=new_seq,
-            parent_id=latest["id"],
-            snapshot_content=snapshot,
-            message=message,
-            changes=changes,
-            commit=commit,
-        )
+        raise RuntimeError("Не удалось добавить версию из-за конкурентной записи")
 
     def rollback_hard(self, name: str | None = None, steps_back: int | None = None):
         versions = self.list_versions()
