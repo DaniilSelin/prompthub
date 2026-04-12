@@ -1,0 +1,74 @@
+[project]
+name = "prompthub-my"
+version = "0.1.0"
+description = "Prompt version control system built on SQLite"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Matthew" },
+    { name = "Sergey" },
+    { name = "Daniil" },
+    { name = "Nikita" },
+    { name = "Fedor" },
+]
+keywords = ["llm", "prompt", "versioning", "langchain", "openai", "anthropic"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+# Core has zero external dependencies — only stdlib (sqlite3).
+dependencies = []
+
+[project.optional-dependencies]
+# Individual provider extras
+langchain   = ["langchain-core>=0.1"]
+openai      = ["openai>=1.0"]
+anthropic   = ["anthropic>=0.25"]
+huggingface = ["transformers>=4.30"]
+
+# Convenience aliases
+core = []  # explicit alias for "bare install" — stdlib only, no LLM dependencies
+all  = [
+    "langchain-core>=0.1",
+    "openai>=1.0",
+    "anthropic>=0.25",
+    "transformers>=4.30",
+]
+
+[project.urls]
+Homepage   = "https://github.com/DaniilSelin/prompthub"
+Repository = "https://github.com/DaniilSelin/prompthub"
+Issues     = "https://github.com/DaniilSelin/prompthub/issues"
+
+[build-system]
+requires      = ["poetry-core>=2.0"]
+build-backend = "poetry.core.masonry.api"
+
+# ---------------------------------------------------------------------------
+# Poetry-specific settings (not duplicating PEP 621 fields already in [project])
+# ---------------------------------------------------------------------------
+[tool.poetry]
+packages = [{ include = "prompthub" }]
+
+[tool.poetry.group.test.dependencies]
+pytest = ">=7.0"
+
+# ---------------------------------------------------------------------------
+# Pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers   = [
+    "unit: unit-level tests",
+    "integration: integration tests",
+    "contract: contract/specification tests",
+]

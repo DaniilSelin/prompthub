@@ -1,13 +1,32 @@
 import sqlite3
+from typing import Any, cast
 
 from prompthub.core.domain.operations import (
-    InsertOperation,
     DeleteOperation,
-    ReplaceOperation,
+    InsertOperation,
     Operation,
+    ReplaceOperation,
 )
-from prompthub.repository import Fields, _INIT_SCHEMA_SQL, SNAPSHOT_INTERVAL, TAG_MODEL_TYPE, TAG_PROMPT_TYPE
+from prompthub.repository import (
+    _INIT_SCHEMA_SQL,
+    SNAPSHOT_INTERVAL,
+    TAG_MODEL_TYPE,
+    TAG_PROMPT_TYPE,
+    Fields,
+)
 from prompthub.repository.queries import BaseQuery, SearchQuery
+from prompthub.repository.types import (
+    ExecuteResult,
+    ModelTagRow,
+    PromptIdRow,
+    PromptMetadata,
+    PromptRow,
+    TagRow,
+    TariffRow,
+    VersionRangeRow,
+    VersionRow,
+)
+from prompthub.search.filters import Condition
 
 
 class PromptRepo:
@@ -15,18 +34,28 @@ class PromptRepo:
         self.conn = conn
         self._init_schema()
 
-    def _init_schema(self):
+    @staticmethod
+    def _row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        return dict(row)
+
+    @staticmethod
+    def _rows_to_dicts(rows: list[sqlite3.Row]) -> list[dict[str, Any]]:
+        return [dict(row) for row in rows]
+
+    def _init_schema(self) -> None:
         self.conn.executescript(_INIT_SCHEMA_SQL)
         self.conn.commit()
 
-    def execute(self, query: BaseQuery):
+    def execute(self, query: BaseQuery) -> ExecuteResult:
         sql, params = query.build()
 
         cur = self.conn.cursor()
         cur.execute(sql, params)
 
         if isinstance(query, SearchQuery):
-            return [dict(r) for r in cur.fetchall()]
+            return self._rows_to_dicts(cur.fetchall())
 
         self.conn.commit()
         return cur.rowcount
@@ -45,9 +74,9 @@ class PromptRepo:
 
         if commit:
             self.conn.commit()
-        return cur.lastrowid
+        return cast(int, cur.lastrowid)
 
-    def get_prompt_by_name(self, name: str):
+    def get_prompt_by_name(self, name: str) -> PromptRow | None:
         cur = self.conn.cursor()
 
         cur.execute(
@@ -58,12 +87,9 @@ class PromptRepo:
             (name,),
         )
 
-        return cur.fetchone()
+        return cast(PromptRow | None, self._row_to_dict(cur.fetchone()))
 
-    def find_by_name_exact(self, name: str):
-        return self.get_prompt_by_name(name)
-
-    def delete_prompt(self, prompt_id: int):
+    def delete_prompt(self, prompt_id: int) -> int:
         cur = self.conn.cursor()
 
         cur.execute(
@@ -77,7 +103,7 @@ class PromptRepo:
         self.conn.commit()
         return cur.rowcount
 
-    def get_prompt(self, prompt_id: int):
+    def get_prompt(self, prompt_id: int) -> PromptRow | None:
         cur = self.conn.cursor()
         cur.execute(
             f"""
@@ -86,9 +112,9 @@ class PromptRepo:
         """,
             (prompt_id,),
         )
-        return cur.fetchone()
+        return cast(PromptRow | None, self._row_to_dict(cur.fetchone()))
 
-    def get_latest_version(self, prompt_id: int):
+    def get_latest_version(self, prompt_id: int) -> VersionRow | None:
         cur = self.conn.cursor()
         cur.execute(
             f"""
@@ -98,9 +124,9 @@ class PromptRepo:
         """,
             (prompt_id,),
         )
-        return cur.fetchone()
+        return cast(VersionRow | None, self._row_to_dict(cur.fetchone()))
 
-    def get_version_by_name(self, prompt_id: int, name: str):
+    def get_version_by_name(self, prompt_id: int, name: str) -> VersionRow | None:
         cur = self.conn.cursor()
         cur.execute(
             f"""
@@ -110,9 +136,9 @@ class PromptRepo:
         """,
             (prompt_id, name),
         )
-        return cur.fetchone()
+        return cast(VersionRow | None, self._row_to_dict(cur.fetchone()))
 
-    def get_version_by_seq(self, prompt_id: int, seq: int):
+    def get_version_by_seq(self, prompt_id: int, seq: int) -> VersionRow | None:
         cur = self.conn.cursor()
         cur.execute(
             f"""
@@ -122,9 +148,9 @@ class PromptRepo:
         """,
             (prompt_id, seq),
         )
-        return cur.fetchone()
+        return cast(VersionRow | None, self._row_to_dict(cur.fetchone()))
 
-    def list_versions(self, prompt_id: int):
+    def list_versions(self, prompt_id: int) -> list[VersionRow]:
         cur = self.conn.cursor()
         cur.execute(
             f"""
@@ -135,7 +161,7 @@ class PromptRepo:
         """,
             (prompt_id,),
         )
-        return cur.fetchall()
+        return cast(list[VersionRow], self._rows_to_dicts(cur.fetchall()))
 
     def insert_version(
         self,
@@ -147,7 +173,7 @@ class PromptRepo:
         message: str | None,
         changes: list[Operation],
         commit: bool = True,
-    ):
+    ) -> int:
         cur = self.conn.cursor()
 
         cur.execute(
@@ -161,7 +187,7 @@ class PromptRepo:
             (prompt_id, name, seq, parent_id, snapshot_content, message),
         )
 
-        version_id = cur.lastrowid
+        version_id = cast(int, cur.lastrowid)
 
         for i, op in enumerate(changes):
             self._insert_change(version_id, i, op)
@@ -170,18 +196,20 @@ class PromptRepo:
             self.conn.commit()
         return version_id
 
-    def delete_version(self, version_id: int):
-        row = self.conn.execute(
+    def delete_version(self, version_id: int) -> None:
+        raw_row = self.conn.execute(
             f"SELECT prompt_id FROM {Fields._PROMPT_VERSIONS_TABLE} WHERE id = ?",
             (version_id,),
         ).fetchone()
+        row = self._row_to_dict(cast(sqlite3.Row | None, raw_row))
         if row is None:
             raise ValueError(f"Версия с id={version_id} не найдена")
 
-        count = self.conn.execute(
+        count_row = self.conn.execute(
             f"SELECT COUNT(*) FROM {Fields._PROMPT_VERSIONS_TABLE} WHERE prompt_id = ?",
             (row["prompt_id"],),
-        ).fetchone()[0]
+        ).fetchone()
+        count = int(cast(sqlite3.Row, count_row)[0])
         if count <= 1:
             raise ValueError("Нельзя удалить единственную версию промпта")
 
@@ -191,13 +219,13 @@ class PromptRepo:
         )
         self.conn.commit()
 
-    def _insert_change(self, version_id: int, idx: int, op: Operation):
+    def _insert_change(self, version_id: int, idx: int, op: Operation) -> None:
         cur = self.conn.cursor()
 
         if isinstance(op, InsertOperation):
             cur.execute(
-                """
-                INSERT INTO prompt_changes (version_id, op_index, op_type, pos, text)
+                f"""
+                INSERT INTO {Fields._PROMPT_CHANGES_TABLE} (version_id, op_index, op_type, pos, text)
                 VALUES (?, ?, 'insert', ?, ?)
             """,
                 (version_id, idx, op.pos, op.text),
@@ -205,8 +233,8 @@ class PromptRepo:
 
         elif isinstance(op, DeleteOperation):
             cur.execute(
-                """
-                INSERT INTO prompt_changes (version_id, op_index, op_type, start, end)
+                f"""
+                INSERT INTO {Fields._PROMPT_CHANGES_TABLE} (version_id, op_index, op_type, start, end)
                 VALUES (?, ?, 'delete', ?, ?)
             """,
                 (version_id, idx, op.start, op.end),
@@ -214,14 +242,14 @@ class PromptRepo:
 
         elif isinstance(op, ReplaceOperation):
             cur.execute(
-                """
-                INSERT INTO prompt_changes (version_id, op_index, op_type, start, end, text)
+                f"""
+                INSERT INTO {Fields._PROMPT_CHANGES_TABLE} (version_id, op_index, op_type, start, end, text)
                 VALUES (?, ?, 'replace', ?, ?, ?)
             """,
                 (version_id, idx, op.start, op.end, op.text),
             )
 
-    def get_nearest_snapshot(self, prompt_id: int, seq: int):
+    def get_nearest_snapshot(self, prompt_id: int, seq: int) -> VersionRow | None:
         cur = self.conn.cursor()
         cur.execute(
             f"""
@@ -234,9 +262,11 @@ class PromptRepo:
         """,
             (prompt_id, seq),
         )
-        return cur.fetchone()
+        return cast(VersionRow | None, self._row_to_dict(cur.fetchone()))
 
-    def get_versions_range(self, prompt_id: int, start: int, end: int):
+    def get_versions_range(
+        self, prompt_id: int, start: int, end: int
+    ) -> list[VersionRangeRow]:
         cur = self.conn.cursor()
         cur.execute(
             f"""
@@ -247,20 +277,20 @@ class PromptRepo:
         """,
             (prompt_id, start, end),
         )
-        return cur.fetchall()
+        return cast(list[VersionRangeRow], self._rows_to_dicts(cur.fetchall()))
 
     def get_changes(self, version_id: int) -> list[Operation]:
         cur = self.conn.cursor()
         cur.execute(
-            """
-            SELECT * FROM prompt_changes
+            f"""
+            SELECT * FROM {Fields._PROMPT_CHANGES_TABLE}
             WHERE version_id = ?
             ORDER BY op_index
         """,
             (version_id,),
         )
 
-        ops = []
+        ops: list[Operation] = []
         for r in cur.fetchall():
             if r["op_type"] == "insert":
                 ops.append(InsertOperation(r["pos"], r["text"]))
@@ -270,7 +300,7 @@ class PromptRepo:
                 ops.append(ReplaceOperation(r["start"], r["end"], r["text"]))
         return ops
 
-    def list_tags(self, prompt_id: int):
+    def list_tags(self, prompt_id: int) -> list[TagRow]:
         cur = self.conn.cursor()
         cur.execute(
             f"""
@@ -282,20 +312,20 @@ class PromptRepo:
         """,
             (prompt_id,),
         )
-        return cur.fetchall()
+        return cast(list[TagRow], self._rows_to_dicts(cur.fetchall()))
 
-    def execute_tag_filter_query(self, filter_obj) -> list:
-        from prompthub.repository.queries import SearchQuery
-
+    def execute_tag_filter_query(self, filter_obj: Condition) -> list[dict[str, Any]]:
         q = SearchQuery(Fields._PROMPTS_TABLE)
         q.filter(filter_obj)
         sql, params = q.build()
         cur = self.conn.cursor()
         cur.execute(sql, params)
-        return cur.fetchall()
+        return self._rows_to_dicts(cur.fetchall())
 
-    def fetch_metadata(self, prompt_id: int) -> dict:
+    def fetch_metadata(self, prompt_id: int) -> PromptMetadata:
         prompt = self.get_prompt(prompt_id)
+        if prompt is None:
+            raise KeyError(f"Промпт с id={prompt_id} не найден")
         tags = self.list_tags(prompt_id)
         cur = self.conn.cursor()
         cur.execute(
@@ -307,28 +337,30 @@ class PromptRepo:
         """,
             (prompt_id,),
         )
-        last_ver = cur.fetchone()
-        model_tags = [
-            {"name": r[Fields.TAG_NAME], "provider": r[Fields.TAG_PROVIDER]}
+        last_ver = self._row_to_dict(cur.fetchone())
+        model_tags: list[ModelTagRow] = [
+            {"name": r["name"], "provider": r["provider"]}
             for r in tags
-            if r[Fields.TAG_TYPE] == TAG_MODEL_TYPE
+            if r["type"] == TAG_MODEL_TYPE
         ]
         return {
             "name": prompt["name"],
             "created_at": prompt["created_at"],
-            "updated_at": last_ver["created_at"] if last_ver else None,
-            "tags": [r[Fields.TAG_NAME] for r in tags if r[Fields.TAG_TYPE] == TAG_PROMPT_TYPE],
+            "updated_at": cast(
+                str | None, last_ver["created_at"] if last_ver else None
+            ),
+            "tags": [r["name"] for r in tags if r["type"] == TAG_PROMPT_TYPE],
             "model_tags": model_tags if model_tags else None,
         }
 
-    def fetch_all_prompts(self) -> list:
+    def fetch_all_prompts(self) -> list[PromptIdRow]:
         cur = self.conn.cursor()
         cur.execute(
             f"SELECT id FROM {Fields._PROMPTS_TABLE} ORDER BY {Fields.PROMPT_NAME}"
         )
-        return cur.fetchall()
+        return cast(list[PromptIdRow], self._rows_to_dicts(cur.fetchall()))
 
-    def fetch_tariffs(self, tag_names: list[str]) -> dict:
+    def fetch_tariffs(self, tag_names: list[str]) -> dict[str, TariffRow]:
         if not tag_names:
             return {}
         placeholders = ",".join("?" * len(tag_names))
@@ -338,9 +370,18 @@ class PromptRepo:
             f"FROM model_tariffs WHERE tag_name IN ({placeholders})",
             tag_names,
         )
-        return {r["tag_name"]: r for r in cur.fetchall()}
+        result: dict[str, TariffRow] = {}
+        for row in self._rows_to_dicts(cur.fetchall()):
+            tag_name = cast(str, row["tag_name"])
+            result[tag_name] = {
+                "tag_name": tag_name,
+                "provider": cast(str, row["provider"]),
+                "input_price_per_1m": float(row["input_price_per_1m"]),
+                "output_price_per_1m": float(row["output_price_per_1m"]),
+            }
+        return result
 
-    def fetch_all_tags(self) -> list:
+    def fetch_all_tags(self) -> list[TagRow]:
         cur = self.conn.cursor()
         cur.execute(
             f"""
@@ -349,7 +390,7 @@ class PromptRepo:
             ORDER BY {Fields.TAG_TYPE}, {Fields.TAG_NAME}
         """
         )
-        return cur.fetchall()
+        return cast(list[TagRow], self._rows_to_dicts(cur.fetchall()))
 
     def fetch_all_model_tag_names(self) -> set[str]:
         """Возвращает имена всех model-тегов в БД (независимо от привязки к промпту)."""
@@ -358,7 +399,7 @@ class PromptRepo:
             f"SELECT {Fields.TAG_NAME} FROM {Fields._TAG_TABLE} WHERE {Fields.TAG_TYPE} = ?",
             (TAG_MODEL_TYPE,),
         )
-        return {r["name"] for r in cur.fetchall()}
+        return {cast(str, r["name"]) for r in cur.fetchall()}
 
     def fetch_current_model_tags(self, prompt_id: int) -> set[str]:
         cur = self.conn.cursor()
@@ -371,7 +412,7 @@ class PromptRepo:
         """,
             (prompt_id, TAG_MODEL_TYPE),
         )
-        return {r["name"] for r in cur.fetchall()}
+        return {cast(str, r["name"]) for r in cur.fetchall()}
 
     def fetch_current_prompt_tags(self, prompt_id: int) -> set[str]:
         """Возвращает множество имён категорийных тегов, привязанных к промпту."""
@@ -385,20 +426,28 @@ class PromptRepo:
         """,
             (prompt_id, TAG_PROMPT_TYPE),
         )
-        return {r["name"] for r in cur.fetchall()}
+        return {cast(str, r["name"]) for r in cur.fetchall()}
 
-    def delete_prompt_model_tag_links(self, prompt_id: int, tag_names: list[str], commit: bool = True):
+    def delete_prompt_model_tag_links(
+        self, prompt_id: int, tag_names: list[str], commit: bool = True
+    ) -> None:
         for name in tag_names:
             self.remove_tag(prompt_id, name, TAG_MODEL_TYPE, commit=False)
         if commit:
             self.conn.commit()
 
     def create_prompt_model_tag_links(
-        self, prompt_id: int, tags: list[dict], commit: bool = True
-    ):
+        self, prompt_id: int, tags: list[ModelTagRow], commit: bool = True
+    ) -> None:
         """tags — список словарей {"name": ..., "provider": ...}"""
         for tag in tags:
-            self.add_tag(prompt_id, tag["name"], TAG_MODEL_TYPE, tag.get("provider"), commit=False)
+            self.add_tag(
+                prompt_id,
+                tag["name"],
+                TAG_MODEL_TYPE,
+                tag.get("provider"),
+                commit=False,
+            )
         if commit:
             self.conn.commit()
 
@@ -409,7 +458,7 @@ class PromptRepo:
         tag_type: str,
         provider: str | None = None,
         commit: bool = True,
-    ):
+    ) -> None:
         cur = self.conn.cursor()
 
         cur.execute(
@@ -433,7 +482,9 @@ class PromptRepo:
         if commit:
             self.conn.commit()
 
-    def remove_tag(self, prompt_id: int, tag_name: str, tag_type: str, commit: bool = True):
+    def remove_tag(
+        self, prompt_id: int, tag_name: str, tag_type: str, commit: bool = True
+    ) -> None:
         cur = self.conn.cursor()
 
         cur.execute(

@@ -1,12 +1,19 @@
+from typing import cast
+
 import pytest
 
-from prompthub.core.domain.operations import DeleteOperation, InsertOperation, ReplaceOperation
+from prompthub.core.domain.operations import (
+    DeleteOperation,
+    InsertOperation,
+    ReplaceOperation,
+)
 from prompthub.facade.prompt import Prompt
+from prompthub.repository.repo import PromptRepo
 
 
 @pytest.mark.unit
 def test_uc03_002_build_changeset_produces_insert_delete_replace_with_indices():
-    prompt = Prompt(id=1, repo=None)
+    prompt = Prompt(id=1, repo=cast(PromptRepo, None))
 
     insert_ops = prompt._build_changeset("abc", "abXc")
     assert len(insert_ops) == 1
@@ -29,8 +36,8 @@ def test_uc03_002_build_changeset_produces_insert_delete_replace_with_indices():
 
 
 @pytest.mark.unit
-def test_uc07_001_changeset_operations_transform_old_into_new():
-    prompt = Prompt(id=1, repo=None)
+def test_uc07_003_changeset_operations_transform_old_into_new():
+    prompt = Prompt(id=1, repo=cast(PromptRepo, None))
     old = "Hello brave world"
     new = "Hello world!"
 

@@ -3,8 +3,10 @@
 Покрывает: конвертацию per-token → per-1M, извлечение провайдера, обработку ошибок.
 """
 import json
+import urllib.error
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from prompthub.infrastructure.pricing_gateway import PricingAPIGateway
 
@@ -111,7 +113,6 @@ class TestParse:
 class TestFetchPricingData:
 
     def test_raises_connection_error_on_network_failure(self, gateway):
-        import urllib.error
         with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("timeout")):
             with pytest.raises(ConnectionError, match="недоступен"):
                 gateway.fetch_pricing_data()

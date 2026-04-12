@@ -1,6 +1,7 @@
 import json
-import urllib.request
 import urllib.error
+import urllib.request
+from typing import Any
 
 from prompthub.core.domain.model_tariff import ModelTariff
 
@@ -39,7 +40,7 @@ class PricingAPIGateway:
         except (json.JSONDecodeError, KeyError, TypeError) as e:
             raise ValueError(f"Невалидный формат ответа API: {e}") from e
 
-    def _parse(self, data: dict) -> list[ModelTariff]:
+    def _parse(self, data: dict[str, Any]) -> list[ModelTariff]:
         items = data.get("data")
         if not isinstance(items, list):
             raise ValueError("Ожидался список моделей в поле 'data'")
@@ -63,7 +64,9 @@ class PricingAPIGateway:
                     tag_name=model_id,
                     provider=provider,
                     input_price_per_1m=round(input_per_token * _PER_TOKEN_TO_PER_1M, 6),
-                    output_price_per_1m=round(output_per_token * _PER_TOKEN_TO_PER_1M, 6),
+                    output_price_per_1m=round(
+                        output_per_token * _PER_TOKEN_TO_PER_1M, 6
+                    ),
                 )
             )
 

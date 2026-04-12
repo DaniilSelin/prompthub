@@ -23,6 +23,9 @@ class Condition(ABC):
 
 
 class FieldEquals(Condition):
+    field: str
+    value: Any
+
     def __init__(self, field: str, value: Any):
         self.field = field
         self.value = value
@@ -32,6 +35,9 @@ class FieldEquals(Condition):
 
 
 class FieldGreater(Condition):
+    field: str
+    value: Any
+
     def __init__(self, field: str, value: Any):
         self.field = field
         self.value = value
@@ -41,6 +47,9 @@ class FieldGreater(Condition):
 
 
 class FieldLike(Condition):
+    field: str
+    pattern: str
+
     def __init__(self, field: str, pattern: str):
         self.field = field
         self.pattern = pattern
@@ -50,46 +59,60 @@ class FieldLike(Condition):
 
 
 class FieldIn(Condition):
-    def __init__(self, field: str, values: list):
+    field: str
+    values: list[Any]
+
+    def __init__(self, field: str, values: list[Any]):
         self.field = field
         self.values = list(values)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"In({self.field} IN {self.values})"
 
 
 class FieldBetween(Condition):
-    def __init__(self, field: str, low, high):
+    field: str
+    low: Any
+    high: Any
+
+    def __init__(self, field: str, low: Any, high: Any):
         self.field = field
         self.low = low
         self.high = high
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Between({self.field} BETWEEN {self.low} AND {self.high})"
 
 
 class FieldIsNull(Condition):
+    field: str
+
     def __init__(self, field: str):
         self.field = field
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"IsNull({self.field} IS NULL)"
 
 
 class FieldNotNull(Condition):
+    field: str
+
     def __init__(self, field: str):
         self.field = field
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"NotNull({self.field} IS NOT NULL)"
 
 
 class RawCondition(Condition):
-    def __init__(self, sql: str, params: list | None = None):
+    sql: str
+    params: list[Any]
+
+    def __init__(self, sql: str, params: list[Any] | None = None):
         self.sql = sql
         self.params = params or []
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Raw({self.sql})"
 
 
@@ -117,35 +140,35 @@ class TagFilter(RawCondition):
             params = [name]
         super().__init__(sql, params)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"TagFilter(sql={self.sql!r})"
 
 
-"""
-Сплющивание всё таки приводило к серьёзным ошибкам. Вернул логику вложенных фильтров.
-"""
-
-
 class Filter(Condition):
-    def __init__(self, must=None, should=None, must_not=None):
+    must: list[Condition]
+    should: list[Condition]
+    must_not: list[Condition]
+
+    def __init__(
+        self,
+        must: list[Condition] | None = None,
+        should: list[Condition] | None = None,
+        must_not: list[Condition] | None = None,
+    ):
         self.must = must or []
         self.should = should or []
         self.must_not = must_not or []
 
-    def __and__(self, other):
-        if isinstance(other, Filter):
-            return Filter(must=[self, other])
+    def __and__(self, other: Condition) -> "Filter":
         return Filter(must=[self, other])
 
-    def __or__(self, other):
-        if isinstance(other, Filter):
-            return Filter(should=[self, other])
+    def __or__(self, other: Condition) -> "Filter":
         return Filter(should=[self, other])
 
-    def __invert__(self):
+    def __invert__(self) -> "Filter":
         return Filter(must_not=[self])
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         parts = []
         if self.must:
             parts.append("AND[" + ", ".join(repr(p) for p in self.must) + "]")

@@ -3,14 +3,17 @@ import json
 import pytest
 
 from prompthub.core.domain.diff import VersionDiff, VersionLineDiff
+from prompthub.facade.prompt import Prompt
 from prompthub.facade.storage import Storage
 
 
-def _msg(text: str) -> list[tuple]:
+def _msg(text: str) -> list[tuple[str, str]]:
     return [("user", text)]
 
 
-def _create_prompt_with_versions(storage: Storage, prompt_name: str, contents: list[str]):
+def _create_prompt_with_versions(
+    storage: Storage, prompt_name: str, contents: list[str]
+) -> Prompt:
     prompt = storage.create_prompt(prompt_name)
     for seq, content in enumerate(contents, start=1):
         prompt.add_version(content=_msg(content), description=f"version {seq}")
@@ -124,7 +127,9 @@ def test_uc07_007_compare_versions_chars_chunks_cover_full_content(tmp_path):
     try:
         content_a = _msg("Hello world")
         content_b = _msg("Hi Python world!")
-        prompt = _create_prompt_with_versions(storage, "chunks_cover_prompt", ["Hello world", "Hi Python world!"])
+        prompt = _create_prompt_with_versions(
+            storage, "chunks_cover_prompt", ["Hello world", "Hi Python world!"]
+        )
 
         diff = prompt.compare_versions_chars(1, 2)
 

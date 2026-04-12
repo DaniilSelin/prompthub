@@ -5,6 +5,7 @@ SNAPSHOT_INTERVAL = 5
 class Fields:
     _PROMPTS_TABLE = "prompts"
     _PROMPT_VERSIONS_TABLE = "prompt_versions"
+    _PROMPT_CHANGES_TABLE = "prompt_changes"
     _TAG_TABLE = "tags"
 
     _PROMPT_ID = "id"

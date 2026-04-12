@@ -14,6 +14,7 @@ htmlcov/
 .tox/
 .mypy_cache/
 .ruff_cache/
+dist
 
 # VS Code
 .vscode/
@@ -21,3 +22,4 @@ htmlcov/
 # JetBrains IDEs
 .idea/
 *.txt
+__token__

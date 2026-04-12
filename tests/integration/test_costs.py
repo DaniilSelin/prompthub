@@ -2,22 +2,25 @@
 Интеграционные тесты для подсчёта стоимости промптов.
 Покрывает: per-model token_count, per-model cost, отсутствие тарифа, отсутствие токенизатора.
 """
+
 import warnings
+
 import pytest
 
-from prompthub.facade.storage import Storage
-from prompthub.core.tokenizers.base import ModelTag
-from prompthub.core.domain.model_tariff import ModelTariff
-from prompthub.infrastructure.tariff_manager import TariffManager
 import prompthub.core.tokenizers.registry as reg
-
+from prompthub.core.domain.model_tariff import ModelTariff
+from prompthub.core.tokenizers.base import ModelTag
+from prompthub.facade.storage import Storage
+from prompthub.infrastructure.tariff_manager import TariffManager
 
 # ---------------------------------------------------------------------------
 # Вспомогательные классы и фикстуры
 # ---------------------------------------------------------------------------
 
+
 class _Fixed100Tag(ModelTag):
     """Токенизатор, всегда возвращающий 100 токенов."""
+
     provider_key = "fixed-100"
 
     def _count_text(self, text: str) -> int:
@@ -26,6 +29,7 @@ class _Fixed100Tag(ModelTag):
 
 class _Fixed200Tag(ModelTag):
     """Токенизатор, всегда возвращающий 200 токенов."""
+
     provider_key = "fixed-200"
 
     def _count_text(self, text: str) -> int:
@@ -34,6 +38,7 @@ class _Fixed200Tag(ModelTag):
 
 class _Fixed1000Tag(ModelTag):
     """Токенизатор, всегда возвращающий 1000 токенов."""
+
     provider_key = "fixed-1000"
 
     def _count_text(self, text: str) -> int:
@@ -42,6 +47,7 @@ class _Fixed1000Tag(ModelTag):
 
 class _Fixed500Tag(ModelTag):
     """Токенизатор, всегда возвращающий 500 токенов."""
+
     provider_key = "fixed-500"
 
     def _count_text(self, text: str) -> int:
@@ -91,7 +97,7 @@ def storage(tmp_path):
     s._conn.close()
 
 
-def _upsert(storage, *tariffs: ModelTariff):
+def _upsert(storage: Storage, *tariffs: ModelTariff) -> None:
     TariffManager(storage._conn).bulk_upsert(list(tariffs))
 
 
@@ -99,12 +105,17 @@ def _upsert(storage, *tariffs: ModelTariff):
 # TC-COST-01: каждая модель считает токены своим токенизатором
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 def test_each_model_uses_own_tokenizer(storage):
     _upsert(
         storage,
-        ModelTariff("model-a", "fixed-100", input_price_per_1m=1.0, output_price_per_1m=2.0),
-        ModelTariff("model-b", "fixed-200", input_price_per_1m=1.0, output_price_per_1m=2.0),
+        ModelTariff(
+            "model-a", "fixed-100", input_price_per_1m=1.0, output_price_per_1m=2.0
+        ),
+        ModelTariff(
+            "model-b", "fixed-200", input_price_per_1m=1.0, output_price_per_1m=2.0
+        ),
     )
 
     prompt = storage.create_prompt("p")
@@ -122,17 +133,27 @@ def test_each_model_uses_own_tokenizer(storage):
 # TC-COST-02: цена вычисляется из токенов конкретной модели
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 def test_cost_computed_from_own_token_count(storage):
     _upsert(
         storage,
-        ModelTariff("cheap-model",    "fixed-1000", input_price_per_1m=1.0,  output_price_per_1m=2.0),
-        ModelTariff("expensive-model", "fixed-500",  input_price_per_1m=10.0, output_price_per_1m=20.0),
+        ModelTariff(
+            "cheap-model", "fixed-1000", input_price_per_1m=1.0, output_price_per_1m=2.0
+        ),
+        ModelTariff(
+            "expensive-model",
+            "fixed-500",
+            input_price_per_1m=10.0,
+            output_price_per_1m=20.0,
+        ),
     )
 
     prompt = storage.create_prompt("p")
     prompt.add_version([("user", "hello")])
-    storage.add_model_tags("p", [_Fixed1000Tag("cheap-model"), _Fixed500Tag("expensive-model")])
+    storage.add_model_tags(
+        "p", [_Fixed1000Tag("cheap-model"), _Fixed500Tag("expensive-model")]
+    )
 
     data = storage.list_prompts()
     costs = data[0]["costs"]
@@ -147,19 +168,27 @@ def test_cost_computed_from_own_token_count(storage):
 # TC-COST-03: отсутствие тарифа → cost=None, token_count есть
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 def test_missing_tariff_gives_none_cost_but_has_token_count(storage):
     """Тариф удалён после привязки тега — cost=None, token_count сохраняется."""
     _upsert(
         storage,
-        ModelTariff("no-tariff-model", "fixed-42", input_price_per_1m=1.0, output_price_per_1m=2.0),
+        ModelTariff(
+            "no-tariff-model",
+            "fixed-42",
+            input_price_per_1m=1.0,
+            output_price_per_1m=2.0,
+        ),
     )
     prompt = storage.create_prompt("p")
     prompt.add_version([("user", "hello")])
     storage.add_model_tags("p", [_Fixed42Tag("no-tariff-model")])
 
     # Удаляем тариф — имитируем ситуацию устаревших данных
-    storage._conn.execute("DELETE FROM model_tariffs WHERE tag_name = 'no-tariff-model'")
+    storage._conn.execute(
+        "DELETE FROM model_tariffs WHERE tag_name = 'no-tariff-model'"
+    )
     storage._conn.commit()
 
     with warnings.catch_warnings(record=True) as w:
@@ -176,11 +205,17 @@ def test_missing_tariff_gives_none_cost_but_has_token_count(storage):
 # TC-COST-04: отсутствие токенизатора → word-count fallback + предупреждение
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 def test_missing_tokenizer_falls_back_to_word_count(storage):
     _upsert(
         storage,
-        ModelTariff("unknown-model", "unknown-provider", input_price_per_1m=2.0, output_price_per_1m=4.0),
+        ModelTariff(
+            "unknown-model",
+            "unknown-provider",
+            input_price_per_1m=2.0,
+            output_price_per_1m=4.0,
+        ),
     )
 
     prompt = storage.create_prompt("p")
@@ -189,7 +224,9 @@ def test_missing_tokenizer_falls_back_to_word_count(storage):
     # Создаём ModelTag с неизвестным провайдером для теста
     class _UnknownProviderTag(ModelTag):
         provider_key = "unknown-provider"
-        def _count_text(self, text): return 0  # не будет вызван
+
+        def _count_text(self, text: str) -> int:
+            return 0  # не будет вызван
 
     storage.add_model_tags("p", [_UnknownProviderTag("unknown-model")])
 
@@ -208,6 +245,7 @@ def test_missing_tokenizer_falls_back_to_word_count(storage):
 # TC-COST-05: промпт без model_tags → costs = None
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 def test_prompt_without_model_tags_has_none_costs(storage):
     prompt = storage.create_prompt("p")
@@ -221,11 +259,14 @@ def test_prompt_without_model_tags_has_none_costs(storage):
 # TC-COST-06: промпт без версий → нулевые токены и нулевая стоимость
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 def test_prompt_without_versions_has_zero_cost(storage):
     _upsert(
         storage,
-        ModelTariff("some-model", "fixed-999", input_price_per_1m=5.0, output_price_per_1m=10.0),
+        ModelTariff(
+            "some-model", "fixed-999", input_price_per_1m=5.0, output_price_per_1m=10.0
+        ),
     )
 
     storage.create_prompt("p")
@@ -241,11 +282,14 @@ def test_prompt_without_versions_has_zero_cost(storage):
 # TC-COST-07: несколько промптов — каждый считается независимо
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 def test_multiple_prompts_counted_independently(storage):
     _upsert(
         storage,
-        ModelTariff("model-x", "fixed-10", input_price_per_1m=1.0, output_price_per_1m=2.0),
+        ModelTariff(
+            "model-x", "fixed-10", input_price_per_1m=1.0, output_price_per_1m=2.0
+        ),
     )
 
     for i in range(3):

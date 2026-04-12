@@ -6,12 +6,6 @@ from prompthub.core.adapters.base import LLMAdapter
 AdapterFactory: TypeAlias = Callable[[], LLMAdapter]
 
 
-def _load_openai() -> LLMAdapter:
-    from prompthub.core.adapters.openai import OpenAIAdapter
-
-    return OpenAIAdapter()
-
-
 def _load_langchain() -> LLMAdapter:
     from prompthub.core.adapters.langchain import LangChainAdapter
 
@@ -19,7 +13,6 @@ def _load_langchain() -> LLMAdapter:
 
 
 _REGISTRY: dict[str, AdapterFactory] = {
-    "openai": _load_openai,
     "langchain": _load_langchain,
 }
 
@@ -30,7 +23,9 @@ def _normalize_adapter_type(adapter_type: str) -> str:
     return adapter_type.strip().lower()
 
 
-def register_adapter(adapter_type: str, adapter_factory: AdapterFactory | type[LLMAdapter]) -> None:
+def register_adapter(
+    adapter_type: str, adapter_factory: AdapterFactory | type[LLMAdapter]
+) -> None:
     key = _normalize_adapter_type(adapter_type)
 
     if isinstance(adapter_factory, type):

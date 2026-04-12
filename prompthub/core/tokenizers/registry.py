@@ -1,7 +1,8 @@
 import warnings
 from collections.abc import Callable
+from typing import Any
 
-from prompthub.core.tokenizers.base import ModelTag, Messages
+from prompthub.core.tokenizers.base import Messages, ModelTag
 
 
 def _load_openai_tag() -> type[ModelTag]:
@@ -20,6 +21,7 @@ def _load_huggingface_tag() -> type[ModelTag]:
     from prompthub.core.tokenizers.huggingface_tag import HuggingFaceModelTag
 
     return HuggingFaceModelTag
+
 
 # Неизменяемый реестр провайдеров: provider_key → класс токенизатора.
 # Для добавления нового провайдера достаточно добавить строку здесь —
@@ -40,7 +42,11 @@ def resolve_tokenizer(model_name: str, provider_key: str) -> ModelTag | None:
     if provider is None:
         return None
 
-    cls = provider() if callable(provider) and not isinstance(provider, type) else provider
+    cls = (
+        provider()
+        if callable(provider) and not isinstance(provider, type)
+        else provider
+    )
     if not isinstance(cls, type) or not issubclass(cls, ModelTag):
         raise TypeError(f"Провайдер '{provider_key}' должен возвращать класс ModelTag")
 
@@ -53,7 +59,7 @@ def _word_count(messages: Messages) -> int:
 
 def count_tokens_per_model(
     messages: Messages,
-    model_tag_rows: list[dict],
+    model_tag_rows: list[dict[str, Any]],
 ) -> dict[str, int]:
     """Считает токены для каждой модели её собственным токенизатором.
 

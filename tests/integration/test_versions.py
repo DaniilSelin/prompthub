@@ -1,16 +1,19 @@
-import pytest
+import json
 from concurrent.futures import ThreadPoolExecutor
 
+import pytest
+
+from prompthub.facade.prompt import Prompt
 from prompthub.facade.storage import Storage
 
 
-def _msg(text: str) -> list[tuple]:
+def _msg(text: str) -> list[tuple[str, str]]:
     return [("user", text)]
 
 
 def _create_prompt_with_versions(
     storage: Storage, prompt_name: str, contents: list[str]
-):
+) -> Prompt:
     prompt = storage.create_prompt(prompt_name)
 
     for seq, content in enumerate(contents, start=1):
@@ -106,15 +109,16 @@ def test_uc16_002_reconstructs_content_from_snapshot_and_delta_chain(tmp_path):
             (prompt.id,),
         ).fetchall()
 
-        import json
         assert [row["seq"] for row in snapshot_row] == [1, 5]
-        assert json.loads(snapshot_row[-1]["snapshot_content"]) == [list(m) for m in _msg(contents[4])]
+        assert json.loads(snapshot_row[-1]["snapshot_content"]) == [
+            list(m) for m in _msg(contents[4])
+        ]
     finally:
         storage._conn.close()
 
 
 @pytest.mark.integration
-def test_uc16_004_reconstructs_version_with_multi_operation_changeset(tmp_path):
+def test_uc16_007_reconstructs_version_with_multi_operation_changeset(tmp_path):
     db_path = tmp_path / "uc16_multi_ops.sqlite3"
 
     storage = Storage(str(db_path))
@@ -235,7 +239,7 @@ def test_uc03_005_concurrent_add_version_keeps_unique_seq(tmp_path):
     finally:
         bootstrap._conn.close()
 
-    def _worker(i: int):
+    def _worker(i: int) -> None:
         s = Storage(str(db_path))
         try:
             p = s.get_prompt("concurrent_prompt")

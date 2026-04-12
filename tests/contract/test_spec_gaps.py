@@ -1,15 +1,16 @@
 import pytest
 
+from prompthub.facade.prompt import Prompt
 from prompthub.facade.storage import Storage
 
 
-def _msg(text: str) -> list[tuple]:
+def _msg(text: str) -> list[tuple[str, str]]:
     return [("user", text)]
 
 
 def _create_prompt_with_versions(
     storage: Storage, prompt_name: str, contents: list[str]
-):
+) -> Prompt:
     prompt = storage.create_prompt(prompt_name)
 
     for seq, content in enumerate(contents, start=1):
@@ -92,7 +93,9 @@ def test_uc08_001_rollback_by_version_name_creates_new_version_without_losing_hi
         assert after[-1].seq == previous_latest_seq + 1
         assert after[-1].name == "seq-4"
 
-        assert prompt.get_version_content(after[-1].seq) == prompt.get_version_content(1)
+        assert prompt.get_version_content(after[-1].seq) == prompt.get_version_content(
+            1
+        )
         assert [row.seq for row in after[:-1]] == [1, 2, 3]
     finally:
         storage._conn.close()
@@ -122,68 +125,78 @@ def test_uc08_002_rollback_by_steps_creates_new_version_without_losing_history(
         assert after[-1].seq == previous_latest_seq + 1
         assert after[-1].name == "seq-5"
 
-        assert prompt.get_version_content(after[-1].seq) == prompt.get_version_content(2)
+        assert prompt.get_version_content(after[-1].seq) == prompt.get_version_content(
+            2
+        )
         assert [row.seq for row in after[:-1]] == [1, 2, 3, 4]
     finally:
         storage._conn.close()
 
 
 @pytest.mark.contract
-def test_uc16_004_fetch_prompt_with_adapter_type(tmp_path):
-    db_path = tmp_path / "uc16_adapter.sqlite3"
+def test_uc16_004_fetch_prompt_returns_prompt_messages(tmp_path):
+    """fetch_prompt возвращает PromptMessages без адаптера."""
+    from prompthub.core.domain.prompt_messages import PromptMessages
 
+    db_path = tmp_path / "uc16_raw.sqlite3"
     storage = Storage(str(db_path))
     try:
-        prompt = storage.create_prompt("prompt_adapter")
+        prompt = storage.create_prompt("prompt_raw")
         prompt.add_version(
             content=[("user", "Hello"), ("assistant", "Hi!")],
             description="initial",
         )
 
-        result = storage.fetch_prompt("prompt_adapter", adapter_type="openai")
+        result = storage.fetch_prompt("prompt_raw")
 
-        assert isinstance(result, list)
-        assert result[0] == {"role": "user", "content": "Hello"}
-        assert result[1] == {"role": "assistant", "content": "Hi!"}
+        assert isinstance(result, PromptMessages)
+        assert result.content == [("user", "Hello"), ("assistant", "Hi!")]
     finally:
         storage._conn.close()
 
 
 @pytest.mark.contract
-def test_uc16_005_fetch_prompt_with_unsupported_adapter_type_raises(tmp_path):
-    db_path = tmp_path / "uc16_unsupported_adapter.sqlite3"
+def test_uc16_005_langchain_prompt_adapter_wraps_prompt(tmp_path):
+    """LangChainPromptAdapter проксирует Prompt и конвертирует контент в ChatPromptTemplate."""
+    from prompthub.adapters import LangChainPromptAdapter
 
+    db_path = tmp_path / "uc16_langchain_proxy.sqlite3"
     storage = Storage(str(db_path))
     try:
-        prompt = storage.create_prompt("prompt_bad_adapter")
-        prompt.add_version(content=[("user", "Hello")])
-
-        with pytest.raises(ValueError, match="non_existing_adapter"):
-            storage.fetch_prompt("prompt_bad_adapter", adapter_type="non_existing_adapter")
-    finally:
-        storage._conn.close()
-
-
-@pytest.mark.contract
-def test_uc16_006_fetch_prompt_with_langchain_adapter_or_missing_module(tmp_path):
-    db_path = tmp_path / "uc16_langchain_adapter.sqlite3"
-
-    storage = Storage(str(db_path))
-    try:
-        prompt = storage.create_prompt("prompt_langchain")
-        prompt.add_version(
+        p = storage.create_prompt("prompt_lc")
+        p.add_version(
             content=[("system", "You are helpful"), ("user", "Hello")],
             description="initial",
         )
 
+        lc = LangChainPromptAdapter(storage.get_prompt("prompt_lc"))
+
         try:
-            result = storage.fetch_prompt("prompt_langchain", adapter_type="langchain")
-        except ValueError as exc:
-            assert "модуль не установлен" in str(exc)
+            result = lc.get_version_content(1)
+        except ImportError:
+            pytest.skip("langchain-core не установлен")
         else:
-            assert isinstance(result, list)
-            assert len(result) == 2
-            assert hasattr(result[0], "content")
-            assert hasattr(result[1], "content")
+            # Результат должен быть ChatPromptTemplate
+            assert type(result).__name__ == "ChatPromptTemplate"
+    finally:
+        storage._conn.close()
+
+
+@pytest.mark.contract
+def test_uc16_006_langchain_adapter_delegates_add_version(tmp_path):
+    """LangChainPromptAdapter.add_version принимает raw-туплы и делегирует Prompt."""
+    from prompthub.adapters import LangChainPromptAdapter
+
+    db_path = tmp_path / "uc16_langchain_add.sqlite3"
+    storage = Storage(str(db_path))
+    try:
+        p = storage.create_prompt("prompt_lc_add")
+        p.add_version(content=[("user", "v1")])
+
+        lc = LangChainPromptAdapter(storage.get_prompt("prompt_lc_add"))
+        lc.add_version([("user", "v2"), ("assistant", "ok")])
+
+        versions = lc.list_versions()
+        assert len(versions) == 2
     finally:
         storage._conn.close()

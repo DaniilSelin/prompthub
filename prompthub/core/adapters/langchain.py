@@ -5,35 +5,31 @@ from prompthub.core.domain.prompt_messages import PromptMessages
 
 
 class LangChainAdapter(LLMAdapter):
-    """Адаптер формата LangChain messages."""
+    """Адаптер для LangChain — конвертирует PromptMessages в ChatPromptTemplate.
+
+    Использует ChatPromptTemplate.from_messages() с кортежами (role, content),
+    без явного импорта конкретных классов AIMessage/HumanMessage/SystemMessage.
+    """
 
     @staticmethod
-    def _import_langchain_messages():
+    def _import_chat_prompt_template() -> Any:
         try:
-            from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+            from langchain_core.prompts import ChatPromptTemplate
         except ImportError as exc:
             raise ImportError(
-                "Для adapter_type='langchain' установите пакет 'langchain-core'."
+                "Для LangChainAdapter установите пакет 'langchain-core': "
+                "pip install langchain-core"
             ) from exc
-        return AIMessage, HumanMessage, SystemMessage
+        return ChatPromptTemplate
 
-    def serialize(self, prompt: PromptMessages) -> list[Any]:
-        AIMessage, HumanMessage, SystemMessage = self._import_langchain_messages()
+    def serialize(self, prompt: PromptMessages) -> Any:
+        """Конвертирует PromptMessages в ChatPromptTemplate.
 
-        role_map = {
-            "system": SystemMessage,
-            "user": HumanMessage,
-            "assistant": AIMessage,
-        }
-
-        result: list[Any] = []
-        for role, content in prompt.content:
-            cls = role_map.get(role)
-            if cls is None:
-                raise ValueError(f"Неподдерживаемая роль для LangChain: {role}")
-            result.append(cls(content=content))
-
-        return result
+        Использует нативный role-based формат from_messages() с кортежами,
+        без конкретных классов сообщений.
+        """
+        ChatPromptTemplate = self._import_chat_prompt_template()
+        return ChatPromptTemplate.from_messages(prompt.content)
 
     def deserialize(
         self,
@@ -42,31 +38,53 @@ class LangChainAdapter(LLMAdapter):
         name: str = "imported_prompt",
         version: int = 1,
     ) -> PromptMessages:
-        if not isinstance(payload, list):
-            raise TypeError("LangChain payload должен быть списком сообщений")
+        """Конвертирует ChatPromptTemplate или список кортежей обратно в PromptMessages."""
+        self._import_chat_prompt_template()  # проверяем наличие langchain-core
 
         content: list[tuple[str, str]] = []
-        for idx, item in enumerate(payload):
-            role: str | None = None
-            text: str | None = None
 
-            if isinstance(item, dict):
-                role = item.get("role")
-                text = item.get("content")
-            else:
-                message_type = getattr(item, "type", None)
-                if message_type == "system":
-                    role = "system"
-                elif message_type == "human":
-                    role = "user"
-                elif message_type == "ai":
-                    role = "assistant"
+        is_template = (
+            not isinstance(payload, list)
+            and hasattr(payload, "format_messages")
+            and callable(payload.format_messages)
+        )
 
-                text = getattr(item, "content", None)
+        if is_template:
+            # Форматируем без переменных — статичный шаблон
+            messages = payload.format_messages()
+            _type_to_role = {
+                "system": "system",
+                "human": "user",
+                "ai": "assistant",
+            }
+            for idx, msg in enumerate(messages):
+                msg_type = getattr(msg, "type", None)
+                role = _type_to_role.get(msg_type, msg_type)
+                text = getattr(msg, "content", None)
+                if not isinstance(role, str) or not isinstance(text, str):
+                    raise ValueError(f"Некорректное сообщение ChatPromptTemplate #{idx}")
+                content.append((role, text))
 
-            if not isinstance(role, str) or not isinstance(text, str):
-                raise ValueError(f"Некорректное LangChain-сообщение #{idx}")
+        elif isinstance(payload, list):
+            for idx, item in enumerate(payload):
+                if isinstance(item, tuple) and len(item) == 2:
+                    role, text = item
+                elif isinstance(item, dict):
+                    role = item.get("role")
+                    text = item.get("content")
+                else:
+                    msg_type = getattr(item, "type", None)
+                    _type_to_role = {"system": "system", "human": "user", "ai": "assistant"}
+                    role = _type_to_role.get(msg_type, msg_type)
+                    text = getattr(item, "content", None)
 
-            content.append((role, text))
+                if not isinstance(role, str) or not isinstance(text, str):
+                    raise ValueError(f"Некорректное LangChain-сообщение #{idx}")
+                content.append((role, text))
+
+        else:
+            raise TypeError(
+                "LangChain payload должен быть ChatPromptTemplate или списком сообщений"
+            )
 
         return PromptMessages(name=name, version=version, content=content)

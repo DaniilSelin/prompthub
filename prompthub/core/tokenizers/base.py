@@ -1,5 +1,6 @@
-from abc import ABC, abstractmethod
 import warnings
+from abc import ABC, abstractmethod
+from typing import ClassVar
 
 Messages = list[tuple[str, str]]
 
@@ -15,7 +16,7 @@ class ModelTag(ABC):
     по которой система определяет нужный токенизатор при чтении тега из БД.
     """
 
-    provider_key: str  # определяется в подклассе, например "openai"
+    provider_key: ClassVar[str]  # определяется в подклассе, например "openai"
 
     def __init__(self, model_name: str):
         self.model_name = model_name

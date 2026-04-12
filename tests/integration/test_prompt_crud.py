@@ -1,4 +1,5 @@
 import json
+
 import pytest
 
 from prompthub.facade.storage import Storage
@@ -28,7 +29,10 @@ def test_uc02_001_creates_prompt_and_first_version(tmp_path):
         assert len(versions) == 1
         assert versions[0].seq == 1
         assert versions[0].name == "seq-1"
-        assert [tuple(m) for m in json.loads(versions[0].snapshot_content)] == messages_v1
+        assert versions[0].snapshot_content is not None
+        assert [
+            tuple(m) for m in json.loads(versions[0].snapshot_content)
+        ] == messages_v1
     finally:
         storage._conn.close()
 
@@ -52,15 +56,20 @@ def test_uc02_003_prompt_metadata_created_at_is_stored(tmp_path):
 
 
 @pytest.mark.integration
-def test_uc02_004_create_prompt_rolls_back_on_initial_version_failure(tmp_path, monkeypatch):
+def test_uc02_004_create_prompt_rolls_back_on_initial_version_failure(
+    tmp_path, monkeypatch
+):
     db_path = tmp_path / "uc02_atomic_create.sqlite3"
 
     storage = Storage(str(db_path))
     try:
+
         def _fail_add_version(*args, **kwargs):
             raise RuntimeError("forced failure")
 
-        monkeypatch.setattr("prompthub.facade.prompt.Prompt.add_version", _fail_add_version)
+        monkeypatch.setattr(
+            "prompthub.facade.prompt.Prompt.add_version", _fail_add_version
+        )
 
         with pytest.raises(RuntimeError, match="forced failure"):
             storage.create_prompt(
@@ -72,8 +81,6 @@ def test_uc02_004_create_prompt_rolls_back_on_initial_version_failure(tmp_path, 
         assert storage.repo.get_prompt_by_name("atomic_prompt") is None
     finally:
         storage._conn.close()
-
-
 
 
 @pytest.mark.integration

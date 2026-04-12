@@ -1,17 +1,28 @@
-from prompthub.repository import Fields
-from prompthub.repository import SNAPSHOT_INTERVAL
-from prompthub.repository.queries import BaseQuery
-from prompthub.repository.query_factory import QueryFactory
-from prompthub.core.domain.operations import (
-    InsertOperation,
-    DeleteOperation,
-    ReplaceOperation,
-)
-from prompthub.core.domain.diff import DiffChunk, VersionDiff, VersionLineDiff, StructuredDiff, ChangedMessage
-
 import difflib
 import json
 import sqlite3
+import warnings
+
+from prompthub.core.domain.diff import (
+    ChangedMessage,
+    DiffChunk,
+    StructuredDiff,
+    VersionDiff,
+    VersionLineDiff,
+)
+from prompthub.core.domain.operations import (
+    DeleteOperation,
+    InsertOperation,
+    Operation,
+    ReplaceOperation,
+)
+from prompthub.core.domain.tag import PromptTag
+from prompthub.core.tokenizers.base import ModelTag
+from prompthub.repository import SNAPSHOT_INTERVAL, TAG_MODEL_TYPE, TAG_PROMPT_TYPE, Fields
+from prompthub.repository.queries import BaseQuery
+from prompthub.repository.query_factory import QueryFactory
+from prompthub.repository.repo import PromptRepo
+from prompthub.repository.types import ExecuteResult, TagRow
 
 Messages = list[tuple[str, str]]
 
@@ -41,7 +52,7 @@ class PromptVersion:
     def is_snapshot(self) -> bool:
         return self.snapshot_content is not None
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<PromptVersion {self.name} seq={self.seq} snapshot={self.is_snapshot}>"
 
 
@@ -51,19 +62,19 @@ class Prompt(QueryFactory):
     def __init__(
         self,
         id: int,
-        repo,
-        tags: list | None = None,
+        repo: PromptRepo,
+        tags: list[str] | None = None,
     ):
         self.id = id
         self.repo = repo
         self.tags = tags or []
         self.snapshot_interval = SNAPSHOT_INTERVAL
 
-    def execute(self, query: BaseQuery):
+    def execute(self, query: BaseQuery) -> ExecuteResult:
         return self.repo.execute(query)
 
     @staticmethod
-    def _validate_messages(messages: Messages):
+    def _validate_messages(messages: Messages) -> None:
         if not isinstance(messages, list) or not messages:
             raise ValueError("content должен быть непустым списком сообщений")
         for msg in messages:
@@ -90,7 +101,7 @@ class Prompt(QueryFactory):
         content: Messages,
         description: str | None = None,
         commit: bool = True,
-    ):
+    ) -> int:
         self._validate_messages(content)
         serialized = self._serialize(content)
 
@@ -158,7 +169,7 @@ class Prompt(QueryFactory):
         self,
         target_seq: int | None = None,
         steps_back: int | None = None,
-    ):
+    ) -> "PromptVersion":
         versions = self.list_versions()
         if not versions:
             raise ValueError("Нет версий для отката")
@@ -185,9 +196,7 @@ class Prompt(QueryFactory):
         target_seq: int | None = None,
         steps_back: int | None = None,
         description: str | None = None,
-    ):
-        import warnings as _warnings
-
+    ) -> int:
         versions = self.list_versions()
         if not versions:
             raise ValueError("Нет версий для отката")
@@ -205,7 +214,10 @@ class Prompt(QueryFactory):
         else:
             raise ValueError("Нужно указать target_seq или steps_back")
 
-        latest_id = self.repo.get_latest_version(self.id)["id"]
+        latest = self.repo.get_latest_version(self.id)
+        if latest is None:
+            raise ValueError("Нет версий для отката")
+        latest_id = latest["id"]
         result_id = self.add_version(
             content=rollback_version_content,
             description=description or f"rollback to seq {target.seq}",
@@ -213,7 +225,7 @@ class Prompt(QueryFactory):
 
         # ВИ-8, альт. 7а: если содержимое целевой версии идентично актуальной
         if result_id == latest_id:
-            _warnings.warn(
+            warnings.warn(
                 f"Already at target state: откат на seq={target.seq} не нужен — "
                 f"содержимое идентично актуальной версии.",
                 stacklevel=2,
@@ -249,36 +261,31 @@ class Prompt(QueryFactory):
             for r in rows
         ]
 
-    def list_tags(self) -> list[dict]:
-        from prompthub.repository import Fields
+    def list_tags(self) -> list[TagRow]:
         rows = self.repo.list_tags(self.id)
         return [
             {
-                "name": r[Fields.TAG_NAME],
-                "type": r[Fields.TAG_TYPE],
-                "provider": r[Fields.TAG_PROVIDER],
+                "name": r["name"],
+                "type": r["type"],
+                "provider": r["provider"],
             }
             for r in rows
         ]
 
-    def add_model_tag(self, model_tag) -> None:
+    def add_model_tag(self, model_tag: ModelTag) -> None:
         """Привязывает ModelTag к промпту. Провайдер определяется из класса объекта."""
-        from prompthub.repository import TAG_MODEL_TYPE
         provider_key = type(model_tag).provider_key
         self.repo.add_tag(self.id, model_tag.model_name, TAG_MODEL_TYPE, provider_key)
 
-    def remove_model_tag(self, model_tag) -> None:
+    def remove_model_tag(self, model_tag: ModelTag) -> None:
         """Отвязывает ModelTag от промпта."""
-        from prompthub.repository import TAG_MODEL_TYPE
         self.repo.remove_tag(self.id, model_tag.model_name, TAG_MODEL_TYPE)
 
-    def add_prompt_tag(self, tag, commit: bool = True) -> None:
+    def add_prompt_tag(self, tag: PromptTag | str, commit: bool = True) -> None:
         """Привязывает PromptTag (категорийный тег) к промпту.
 
         Если тег уже привязан — выдаёт предупреждение и пропускает (ВИ-9, альт. 4а).
         """
-        import warnings
-        from prompthub.repository import TAG_PROMPT_TYPE
         value = tag.value if hasattr(tag, "value") else str(tag)
         current = self.repo.fetch_current_prompt_tags(self.id)
         if value in current:
@@ -289,9 +296,8 @@ class Prompt(QueryFactory):
             return
         self.repo.add_tag(self.id, value, TAG_PROMPT_TYPE, commit=commit)
 
-    def remove_prompt_tag(self, tag, commit: bool = True) -> None:
+    def remove_prompt_tag(self, tag: PromptTag | str, commit: bool = True) -> None:
         """Отвязывает PromptTag от промпта."""
-        from prompthub.repository import TAG_PROMPT_TYPE
         value = tag.value if hasattr(tag, "value") else str(tag)
         self.repo.remove_tag(self.id, value, TAG_PROMPT_TYPE, commit=commit)
 
@@ -299,7 +305,7 @@ class Prompt(QueryFactory):
         snapshot = self.repo.get_nearest_snapshot(self.id, target_seq)
 
         if snapshot:
-            content = snapshot["snapshot_content"]
+            content = snapshot["snapshot_content"] or ""
             start_seq = snapshot["seq"] + 1
         else:
             content = ""
@@ -416,8 +422,8 @@ class Prompt(QueryFactory):
             changed=changed,
         )
 
-    def _build_changeset(self, old: str, new: str):
-        ops = []
+    def _build_changeset(self, old: str, new: str) -> list[Operation]:
+        ops: list[Operation] = []
         sm = difflib.SequenceMatcher(None, old, new)
 
         for tag, i1, i2, j1, j2 in sm.get_opcodes():

@@ -1,8 +1,9 @@
+from typing import Any
+
 from prompthub.core.tokenizers.base import ModelTag
 
 
 class HuggingFaceModelTag(ModelTag):
-    provider_key = "huggingface"
     """Подсчёт токенов через transformers.AutoTokenizer (HuggingFace).
 
     Принимает любое имя модели из HuggingFace Hub:
@@ -12,9 +13,11 @@ class HuggingFaceModelTag(ModelTag):
     Токенизатор кешируется — загружается один раз при первом вызове.
     """
 
+    provider_key = "huggingface"
+
     def __init__(self, model_name: str):
         super().__init__(model_name)
-        self._tokenizer = None
+        self._tokenizer: Any | None = None
 
     def _get_tokenizer(self):
         if self._tokenizer is None:

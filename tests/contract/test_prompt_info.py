@@ -1,17 +1,13 @@
 import pytest
-from prompthub.facade.storage import Storage
-from prompthub.core.domain.diff import VersionDiff
 
-@pytest.fixture
-def storage(tmp_path):
-    """Фикстура для создания чистого хранилища перед каждым тестом."""
-    db_path = tmp_path / "test_info.sqlite3"
-    storage_obj = Storage(str(db_path))
-    yield storage_obj
-    storage_obj._conn.close()
+from prompthub.core.domain.diff import VersionDiff
+from prompthub.core.domain.model_tariff import ModelTariff
+from prompthub.core.tokenizers.openai_tag import OpenAIModelTag
+from prompthub.infrastructure.tariff_manager import TariffManager
 
 
 # --- ВИ-5: Список промптов ---
+
 
 @pytest.mark.integration
 def test_uc05_001_list_all_prompts_with_metadata(storage):
@@ -29,19 +25,17 @@ def test_uc05_001_list_all_prompts_with_metadata(storage):
 @pytest.mark.contract
 def test_uc05_002_list_prompts_includes_per_model_token_count_and_cost(storage):
     """list_prompts возвращает costs с token_count и cost для каждой модели."""
-    from prompthub.core.tokenizers.openai_tag import OpenAIModelTag
-    from prompthub.core.domain.model_tariff import ModelTariff
-    from prompthub.infrastructure.tariff_manager import TariffManager
-
     # Добавляем тариф вручную (без сети)
-    TariffManager(storage._conn).bulk_upsert([
-        ModelTariff(
-            tag_name="gpt-4o",
-            provider="openai",
-            input_price_per_1m=2.5,
-            output_price_per_1m=10.0,
-        )
-    ])
+    TariffManager(storage._conn).bulk_upsert(
+        [
+            ModelTariff(
+                tag_name="gpt-4o",
+                provider="openai",
+                input_price_per_1m=2.5,
+                output_price_per_1m=10.0,
+            )
+        ]
+    )
 
     prompt = storage.create_prompt("priced_prompt")
     prompt.add_version([("user", "hello world")])
@@ -61,6 +55,7 @@ def test_uc05_002_list_prompts_includes_per_model_token_count_and_cost(storage):
 
 # --- ВИ-6: История версий ---
 
+
 @pytest.mark.integration
 def test_uc06_001_version_history_order_and_fields(storage):
     """Позитивный: Проверка порядка версий (по seq) и наличия описания."""
@@ -74,6 +69,7 @@ def test_uc06_001_version_history_order_and_fields(storage):
     assert history[0].seq == 1
     assert history[1].seq == 2
     assert history[0].message == "first commit"
+
 
 @pytest.mark.integration
 def test_uc06_002_history_after_prompt_deletion(storage):
@@ -91,6 +87,7 @@ def test_uc06_002_history_after_prompt_deletion(storage):
 
 
 # --- ВИ-7: Сравнение версий ---
+
 
 @pytest.mark.integration
 def test_uc07_001_changeset_storage_integrity(storage):

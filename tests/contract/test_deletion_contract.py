@@ -1,16 +1,10 @@
 import pytest
-from prompthub.facade.storage import Storage
-from prompthub.core.domain.tag import PromptTag
 
-@pytest.fixture
-def storage(tmp_path):
-    db_path = tmp_path / "deletion_contract.sqlite3"
-    storage_obj = Storage(str(db_path))
-    yield storage_obj
-    storage_obj._conn.close()
+from prompthub.core.domain.tag import PromptTag
 
 
 # --- ВИ-11: Удаление версии ---
+
 
 @pytest.mark.contract
 def test_uc11_002_delete_last_remaining_version_raises_error(storage):
@@ -29,6 +23,7 @@ def test_uc11_002_delete_last_remaining_version_raises_error(storage):
 
 # --- ВИ-13: Удаление промпта (Связи и консистентность) ---
 
+
 @pytest.mark.contract
 def test_uc13_003_global_tags_persistence_contract(storage):
     tag_name = "shared-tag"
@@ -41,12 +36,15 @@ def test_uc13_003_global_tags_persistence_contract(storage):
     storage.repo.delete_prompt(p1.id)
 
     conn = storage._conn
-    res_links = conn.execute("SELECT * FROM prompt_tags WHERE prompt_id=?", (p1.id,)).fetchall()
+    res_links = conn.execute(
+        "SELECT * FROM prompt_tags WHERE prompt_id=?", (p1.id,)
+    ).fetchall()
     assert len(res_links) == 0
 
     res_tag = conn.execute("SELECT * FROM tags WHERE name=?", (tag_name,)).fetchone()
     assert res_tag is not None
     assert res_tag["name"] == tag_name
+
 
 @pytest.mark.contract
 def test_uc13_004_delete_prompt_cleans_versions_metadata(storage):
@@ -57,5 +55,7 @@ def test_uc13_004_delete_prompt_cleans_versions_metadata(storage):
 
     storage.repo.delete_prompt(p_id)
 
-    versions = storage._conn.execute("SELECT id FROM prompt_versions WHERE prompt_id=?", (p_id,)).fetchall()
+    versions = storage._conn.execute(
+        "SELECT id FROM prompt_versions WHERE prompt_id=?", (p_id,)
+    ).fetchall()
     assert len(versions) == 0

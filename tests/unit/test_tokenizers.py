@@ -2,24 +2,25 @@
 Юнит-тесты для системы подсчёта токенов.
 Покрывает: базовый класс ModelTag, конкретные провайдеры, реестр провайдеров.
 """
+
 import sys
 import warnings
-import pytest
 from unittest.mock import MagicMock
 
-from prompthub.core.tokenizers.base import ModelTag
-from prompthub.core.tokenizers.openai_tag import OpenAIModelTag
-from prompthub.core.tokenizers.anthropic_tag import AnthropicModelTag
-from prompthub.core.tokenizers.huggingface_tag import HuggingFaceModelTag
 import prompthub.core.tokenizers.registry as reg
-
+from prompthub.core.tokenizers.anthropic_tag import AnthropicModelTag
+from prompthub.core.tokenizers.base import ModelTag
+from prompthub.core.tokenizers.huggingface_tag import HuggingFaceModelTag
+from prompthub.core.tokenizers.openai_tag import OpenAIModelTag
 
 # ---------------------------------------------------------------------------
 # Вспомогательные тестовые классы
 # ---------------------------------------------------------------------------
 
+
 class _WordCountTag(ModelTag):
     """Тестовый тег: считает слова, не зависит от внешних библиотек."""
+
     provider_key = "word-count-test"
 
     def _count_text(self, text: str) -> int:
@@ -28,6 +29,7 @@ class _WordCountTag(ModelTag):
 
 class _BrokenTag(ModelTag):
     """Тестовый тег: всегда бросает исключение."""
+
     provider_key = "broken-test"
 
     def _count_text(self, text: str) -> int:
@@ -37,6 +39,7 @@ class _BrokenTag(ModelTag):
 # ---------------------------------------------------------------------------
 # ModelTag: базовое поведение
 # ---------------------------------------------------------------------------
+
 
 class TestModelTagBase:
 
@@ -78,31 +81,98 @@ class TestModelTagBase:
 # OpenAIModelTag
 # ---------------------------------------------------------------------------
 
+
 class TestOpenAIModelTag:
 
-    def test_returns_positive_int_for_known_model(self):
-        tag = OpenAIModelTag("gpt-4o")
-        result = tag.get_token_count([("user", "Hello, world!")])
-        assert isinstance(result, int)
-        assert result > 0
+    def _make_mock_openai(self, total_tokens: int) -> tuple[MagicMock, MagicMock]:
+        mock_response = MagicMock()
+        mock_response.total_tokens = total_tokens
 
-    def test_encoder_is_cached_after_first_call(self):
+        mock_completions = MagicMock()
+        mock_completions.count_tokens.return_value = mock_response
+
+        mock_beta_chat = MagicMock()
+        mock_beta_chat.completions = mock_completions
+
+        mock_client = MagicMock()
+        mock_client.beta = MagicMock()
+        mock_client.beta.chat = mock_beta_chat
+
+        mock_openai_module = MagicMock()
+        mock_openai_module.OpenAI.return_value = mock_client
+        return mock_openai_module, mock_client
+
+    def test_calls_sdk_count_tokens(self, monkeypatch):
+        mock_openai, mock_client = self._make_mock_openai(17)
+        monkeypatch.setitem(sys.modules, "openai", mock_openai)
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+        tag = OpenAIModelTag("gpt-4o")
+        result = tag.get_token_count([("user", "hello"), ("assistant", "hi")])
+
+        assert result == 17
+        mock_client.beta.chat.completions.count_tokens.assert_called_once_with(
+            model="gpt-4o",
+            messages=[
+                {"role": "user", "content": "hello"},
+                {"role": "assistant", "content": "hi"},
+            ],
+        )
+
+    def test_client_is_cached_after_first_call(self, monkeypatch):
+        mock_openai, mock_client = self._make_mock_openai(5)
+        monkeypatch.setitem(sys.modules, "openai", mock_openai)
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
         tag = OpenAIModelTag("gpt-4o")
         tag.get_token_count([("user", "first")])
-        enc_ref = tag._enc
+        client_ref = tag._client
         tag.get_token_count([("user", "second")])
-        assert tag._enc is enc_ref
+        assert tag._client is client_ref
+        assert mock_openai.OpenAI.call_count == 1
 
-    def test_longer_text_produces_more_tokens(self):
+    def test_longer_text_produces_more_tokens(self, monkeypatch):
+        call_count = [0]
+
+        def fake_count_tokens(**kwargs):
+            call_count[0] += 1
+            total_chars = sum(len(m["content"]) for m in kwargs["messages"])
+            mock_response = MagicMock()
+            mock_response.total_tokens = total_chars
+            return mock_response
+
+        mock_openai, mock_client = self._make_mock_openai(0)
+        mock_client.beta.chat.completions.count_tokens.side_effect = fake_count_tokens
+        monkeypatch.setitem(sys.modules, "openai", mock_openai)
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
         tag = OpenAIModelTag("gpt-4o")
         short = tag.get_token_count([("user", "Hi")])
         long = tag.get_token_count([("user", "Hi " * 50)])
         assert long > short
 
-    def test_returns_minus_one_and_warns_if_tiktoken_unavailable(self, monkeypatch):
-        monkeypatch.setitem(sys.modules, "tiktoken", None)
+    def test_returns_minus_one_and_warns_if_api_key_missing(self, monkeypatch):
+        mock_openai, _ = self._make_mock_openai(0)
+        monkeypatch.setitem(sys.modules, "openai", mock_openai)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
         tag = OpenAIModelTag("gpt-4o")
-        tag._enc = None  # сбрасываем кеш
+        tag._client = None
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = tag.get_token_count([("user", "hello")])
+
+        assert result == -1
+        assert len(w) == 1
+        assert "OPENAI_API_KEY" in str(w[0].message)
+
+    def test_returns_minus_one_and_warns_if_sdk_unavailable(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "openai", None)
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+        tag = OpenAIModelTag("gpt-4o")
+        tag._client = None
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
@@ -116,9 +186,10 @@ class TestOpenAIModelTag:
 # AnthropicModelTag
 # ---------------------------------------------------------------------------
 
+
 class TestAnthropicModelTag:
 
-    def _make_mock_anthropic(self, token_count: int):
+    def _make_mock_anthropic(self, token_count: int) -> tuple[MagicMock, MagicMock]:
         mock_response = MagicMock()
         mock_response.input_tokens = token_count
 
@@ -135,6 +206,7 @@ class TestAnthropicModelTag:
     def test_calls_sdk_count_tokens(self, monkeypatch):
         mock_anthropic, mock_client = self._make_mock_anthropic(42)
         monkeypatch.setitem(sys.modules, "anthropic", mock_anthropic)
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
         tag = AnthropicModelTag("claude-3-5-sonnet-20241022")
         result = tag.get_token_count([("user", "hello"), ("assistant", "hi")])
@@ -147,6 +219,19 @@ class TestAnthropicModelTag:
                 {"role": "assistant", "content": "hi"},
             ],
         )
+
+    def test_returns_minus_one_and_warns_if_api_key_missing(self, monkeypatch):
+        mock_anthropic, _ = self._make_mock_anthropic(0)
+        monkeypatch.setitem(sys.modules, "anthropic", mock_anthropic)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = AnthropicModelTag().get_token_count([("user", "hello")])
+
+        assert result == -1
+        assert len(w) == 1
+        assert "ANTHROPIC_API_KEY" in str(w[0].message)
 
     def test_returns_minus_one_and_warns_if_sdk_unavailable(self, monkeypatch):
         monkeypatch.setitem(sys.modules, "anthropic", None)
@@ -172,6 +257,7 @@ class TestAnthropicModelTag:
         mock_anthropic, mock_client = self._make_mock_anthropic(0)
         mock_client.messages.count_tokens.side_effect = fake_count_tokens
         monkeypatch.setitem(sys.modules, "anthropic", mock_anthropic)
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
         tag = AnthropicModelTag()
         short = tag.get_token_count([("user", "Hi")])
@@ -183,9 +269,10 @@ class TestAnthropicModelTag:
 # HuggingFaceModelTag
 # ---------------------------------------------------------------------------
 
+
 class TestHuggingFaceModelTag:
 
-    def _make_mock_transformers(self, token_ids: list[int]):
+    def _make_mock_transformers(self, token_ids: list[int]) -> MagicMock:
         mock_tokenizer = MagicMock()
         mock_tokenizer.encode.return_value = token_ids
         mock_transformers = MagicMock()
@@ -231,6 +318,7 @@ class TestHuggingFaceModelTag:
 # Registry: _PROVIDER_REGISTRY, resolve_tokenizer, count_tokens_per_model
 # ---------------------------------------------------------------------------
 
+
 class TestRegistry:
 
     def test_provider_registry_contains_known_providers(self):
@@ -250,11 +338,15 @@ class TestRegistry:
     def test_count_tokens_per_model_uses_provider_from_row(self, monkeypatch):
         class Fixed10(ModelTag):
             provider_key = "fixed-10"
-            def _count_text(self, text): return 10
+
+            def _count_text(self, text: str) -> int:
+                return 10
 
         class Fixed20(ModelTag):
             provider_key = "fixed-20"
-            def _count_text(self, text): return 20
+
+            def _count_text(self, text: str) -> int:
+                return 20
 
         monkeypatch.setitem(reg._PROVIDER_REGISTRY, "fixed-10", Fixed10)
         monkeypatch.setitem(reg._PROVIDER_REGISTRY, "fixed-20", Fixed20)
@@ -291,11 +383,15 @@ class TestRegistry:
     def test_each_model_gets_independent_count(self, monkeypatch):
         class LenTag(ModelTag):
             provider_key = "len-test"
-            def _count_text(self, text): return len(text)
+
+            def _count_text(self, text: str) -> int:
+                return len(text)
 
         class WordTag(ModelTag):
             provider_key = "word-test"
-            def _count_text(self, text): return len(text.split())
+
+            def _count_text(self, text: str) -> int:
+                return len(text.split())
 
         monkeypatch.setitem(reg._PROVIDER_REGISTRY, "len-test", LenTag)
         monkeypatch.setitem(reg._PROVIDER_REGISTRY, "word-test", WordTag)
@@ -307,7 +403,7 @@ class TestRegistry:
         messages = [("user", "hi there")]
         result = reg.count_tokens_per_model(messages, rows)
 
-        assert result["len-model"] == 8   # len("hi there")
+        assert result["len-model"] == 8  # len("hi there")
         assert result["word-model"] == 2  # 2 слова
 
     def test_empty_rows_returns_empty_dict(self):

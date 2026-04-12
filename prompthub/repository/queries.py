@@ -1,29 +1,32 @@
-from typing import Any, Union
 from abc import abstractmethod
+from typing import Any, TypeVar
 
 from prompthub.search.filters import (
-    Filter,
+    Condition,
+    FieldBetween,
     FieldEquals,
     FieldGreater,
-    FieldLike,
     FieldIn,
-    RawCondition,
-    FieldBetween,
-    FieldNotNull,
     FieldIsNull,
+    FieldLike,
+    FieldNotNull,
+    Filter,
+    RawCondition,
 )
+
+Q = TypeVar("Q", bound="BaseQuery")
 
 
 class BaseQuery:
     def __init__(self, table: str):
         self.table = table
-        self.filters: Filter | None = None
+        self.filters: Condition | None = None
         self._order_by: str | None = None
         self._limit: int | None = None
         self._offset: int | None = None
         self.params: list[Any] = []
 
-    def clone(self):
+    def clone(self: Q) -> Q:
         q = self.__class__(self.table)
         q.filters = self.filters
         q._order_by = self._order_by
@@ -31,26 +34,26 @@ class BaseQuery:
         q._offset = self._offset
         return q
 
-    def filter(self, filter_obj: Filter):
+    def filter(self: Q, filter_obj: Condition) -> Q:
         if self.filters is None:
             self.filters = filter_obj
         else:
             self.filters = self.filters & filter_obj
         return self
 
-    def order_by(self, field: str):
+    def order_by(self: Q, field: str) -> Q:
         self._order_by = field
         return self
 
-    def limit(self, n: int):
+    def limit(self: Q, n: int) -> Q:
         self._limit = n
         return self
 
-    def offset(self, n: int):
+    def offset(self: Q, n: int) -> Q:
         self._offset = n
         return self
 
-    def compile(self, condition) -> str:
+    def compile(self, condition: Condition | None) -> str:
         if condition is None:
             return "1=1"
 
@@ -92,7 +95,7 @@ class BaseQuery:
 
         raise ValueError("Unknown condition type: %r" % (type(condition),))
 
-    def compile_group(self, conditions: list, joiner: str) -> str:
+    def compile_group(self, conditions: list[Condition], joiner: str) -> str:
         if not conditions:
             return ""
 
@@ -122,8 +125,8 @@ class BaseQuery:
         return " AND ".join(p for p in parts if p)
 
     @abstractmethod
-    def build(self):
-        pass
+    def build(self) -> tuple[str, list[Any]]:
+        raise NotImplementedError
 
 
 class SearchQuery(BaseQuery):
@@ -149,10 +152,10 @@ class SearchQuery(BaseQuery):
         if self._order_by:
             sql += f" ORDER BY {self._order_by}"
 
-        if self._limit != None:
+        if self._limit is not None:
             sql += " LIMIT ?"
             self.params.append(self._limit)
-        if self._offset != None:
+        if self._offset is not None:
             sql += " OFFSET ?"
             self.params.append(self._offset)
 
@@ -160,11 +163,11 @@ class SearchQuery(BaseQuery):
 
 
 class UpdateQuery(BaseQuery):
-    def __init__(self, table: str, values: dict):
+    def __init__(self, table: str, values: dict[str, Any]):
         super().__init__(table)
         self.values = values
 
-    def build(self):
+    def build(self) -> tuple[str, list[Any]]:
         self.params.clear()
         if not self.values:
             raise ValueError("UpdateQuery.values is empty")
@@ -186,7 +189,7 @@ class DeleteQuery(BaseQuery):
     def __init__(self, table: str):
         super().__init__(table)
 
-    def build(self):
+    def build(self) -> tuple[str, list[Any]]:
         self.params.clear()
         where_sql = self.compile(self.filters) if self.filters else "1=1"
 
@@ -196,7 +199,7 @@ class DeleteQuery(BaseQuery):
 
 
 class InsertQuery(BaseQuery):
-    def __init__(self, table: str, rows: Union[dict[str, Any], list[dict[str, Any]]]):
+    def __init__(self, table: str, rows: dict[str, Any] | list[dict[str, Any]]):
         super().__init__(table)
         if isinstance(rows, dict):
             self.rows = [rows]
@@ -212,7 +215,7 @@ class InsertQuery(BaseQuery):
                 raise ValueError("All rows must have the same columns")
         self.columns = list(self.rows[0].keys())
 
-    def build(self):
+    def build(self) -> tuple[str, list[Any]]:
         if not self.rows:
             raise ValueError("InsertQuery.rows is empty")
 

@@ -1,4 +1,5 @@
 import sqlite3
+
 from prompthub.core.domain.model_tariff import ModelTariff
 
 

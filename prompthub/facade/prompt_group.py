@@ -1,27 +1,31 @@
+from typing import Any, TypeVar, cast
+
+from prompthub.repository import TAG_PROMPT_TYPE, Fields
 from prompthub.repository.queries import (
     BaseQuery,
-    SearchQuery,
-    InsertQuery,
     DeleteQuery,
+    SearchQuery,
     UpdateQuery,
 )
-from prompthub.repository import Fields, TAG_PROMPT_TYPE, SNAPSHOT_INTERVAL
-from prompthub.search.filters import RawCondition, Filter
-from prompthub.core.domain.tag import PromptTag
+from prompthub.repository.repo import PromptRepo
+from prompthub.repository.types import ExecuteResult
+from prompthub.search.filters import Condition, RawCondition
+
+Q = TypeVar("Q", bound=BaseQuery)
 
 
 class PromptGroup:
     table: str = Fields._PROMPT_VERSIONS_TABLE
 
-    def __init__(self, repo, prompt_query: BaseQuery | None = None):
+    def __init__(self, repo: PromptRepo, prompt_query: BaseQuery | None = None):
         self.repo = repo
         self.prompt_query = prompt_query or SearchQuery(Fields._PROMPTS_TABLE)
 
-    def _compile_prompt_query(self):
+    def _compile_prompt_query(self) -> tuple[str, list[Any]]:
         sql, params = self.prompt_query.build()
         return f"SELECT {Fields._PROMPT_ID} FROM ({sql}) AS sub", params
 
-    def _add_group_condition(self, query: BaseQuery) -> BaseQuery:
+    def _add_group_condition(self, query: Q) -> Q:
         sub_sql, sub_params = self._compile_prompt_query()
 
         cond = RawCondition(
@@ -32,7 +36,7 @@ class PromptGroup:
         query.filters = query.filters & cond if query.filters else cond
         return query
 
-    def filter_prompts(self, filter_obj: Filter):
+    def filter_prompts(self, filter_obj: Condition) -> "PromptGroup":
         new_query = self.prompt_query.clone()
         new_query.filter(filter_obj)
         return PromptGroup(self.repo, new_query)
@@ -41,7 +45,7 @@ class PromptGroup:
         q = SearchQuery(self.table, text)
         return self._add_group_condition(q)
 
-    def update_versions(self, values: dict) -> UpdateQuery:
+    def update_versions(self, values: dict[str, Any]) -> UpdateQuery:
         q = UpdateQuery(self.table, values)
         return self._add_group_condition(q)
 
@@ -49,7 +53,7 @@ class PromptGroup:
         q = DeleteQuery(self.table)
         return self._add_group_condition(q)
 
-    def with_tag(self, tag_name: str, tag_type: str = TAG_PROMPT_TYPE):
+    def with_tag(self, tag_name: str, tag_type: str = TAG_PROMPT_TYPE) -> "PromptGroup":
         cond = RawCondition(
             f"""
             EXISTS (
@@ -69,7 +73,9 @@ class PromptGroup:
 
         return PromptGroup(self.repo, new_query)
 
-    def without_tag(self, tag_name: str, tag_type: str = TAG_PROMPT_TYPE):
+    def without_tag(
+        self, tag_name: str, tag_type: str = TAG_PROMPT_TYPE
+    ) -> "PromptGroup":
         cond = RawCondition(
             f"""
             NOT EXISTS (
@@ -89,16 +95,19 @@ class PromptGroup:
 
         return PromptGroup(self.repo, new_query)
 
-    def list_versions(self, version_filter: Filter | None = None):
+    def list_versions(
+        self, version_filter: Condition | None = None
+    ) -> list[dict[str, Any]]:
         q = SearchQuery(self.table)
 
         if version_filter:
             q.filter(version_filter)
 
         q = self._add_group_condition(q)
-        return self.repo.execute(q)
+        result = self.repo.execute(q)
+        return cast(list[dict[str, Any]], result)
 
-    def execute(self, query: BaseQuery):
+    def execute(self, query: BaseQuery) -> ExecuteResult:
         return self.repo.execute(self._add_group_condition(query))
 
     def count(self) -> int:
@@ -113,5 +122,7 @@ class PromptGroup:
 
         q.filters = cond
         result = self.repo.execute(q)
+        if not isinstance(result, list):
+            return int(result)
 
         return len(result)
