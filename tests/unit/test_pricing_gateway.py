@@ -17,25 +17,6 @@ def gateway():
 
 
 # ---------------------------------------------------------------------------
-# _extract_provider
-# ---------------------------------------------------------------------------
-
-class TestExtractProvider:
-
-    def test_extracts_prefix_before_slash(self, gateway):
-        assert gateway._extract_provider("openai/gpt-4o") == "openai"
-
-    def test_extracts_only_first_segment(self, gateway):
-        assert gateway._extract_provider("meta-llama/llama-3.1-8b-instruct") == "meta-llama"
-
-    def test_returns_empty_string_without_slash(self, gateway):
-        assert gateway._extract_provider("gpt-4o") == ""
-
-    def test_returns_empty_string_for_empty_id(self, gateway):
-        assert gateway._extract_provider("") == ""
-
-
-# ---------------------------------------------------------------------------
 # _parse: конвертация цен
 # ---------------------------------------------------------------------------
 
@@ -56,11 +37,6 @@ class TestParse:
         data = self._data(self._model("openai/gpt-4o", "0.0000025", "0.00001"))
         result = gateway._parse(data)
         assert result[0].output_price_per_1m == pytest.approx(10.0)
-
-    def test_sets_provider_from_model_id(self, gateway):
-        data = self._data(self._model("anthropic/claude-3-5-sonnet", "0.000003", "0.000015"))
-        result = gateway._parse(data)
-        assert result[0].provider == "anthropic"
 
     def test_sets_tag_name_from_model_id(self, gateway):
         data = self._data(self._model("openai/gpt-4o-mini", "0.00000015", "0.0000006"))
@@ -146,4 +122,3 @@ class TestFetchPricingData:
         assert len(result) == 2
         gpt = next(t for t in result if t.tag_name == "openai/gpt-4o")
         assert gpt.input_price_per_1m == pytest.approx(2.5)
-        assert gpt.provider == "openai"

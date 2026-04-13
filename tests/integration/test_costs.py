@@ -110,12 +110,8 @@ def _upsert(storage: Storage, *tariffs: ModelTariff) -> None:
 def test_each_model_uses_own_tokenizer(storage):
     _upsert(
         storage,
-        ModelTariff(
-            "model-a", "fixed-100", input_price_per_1m=1.0, output_price_per_1m=2.0
-        ),
-        ModelTariff(
-            "model-b", "fixed-200", input_price_per_1m=1.0, output_price_per_1m=2.0
-        ),
+        ModelTariff("model-a", input_price_per_1m=1.0, output_price_per_1m=2.0),
+        ModelTariff("model-b", input_price_per_1m=1.0, output_price_per_1m=2.0),
     )
 
     prompt = storage.create_prompt("p")
@@ -138,15 +134,8 @@ def test_each_model_uses_own_tokenizer(storage):
 def test_cost_computed_from_own_token_count(storage):
     _upsert(
         storage,
-        ModelTariff(
-            "cheap-model", "fixed-1000", input_price_per_1m=1.0, output_price_per_1m=2.0
-        ),
-        ModelTariff(
-            "expensive-model",
-            "fixed-500",
-            input_price_per_1m=10.0,
-            output_price_per_1m=20.0,
-        ),
+        ModelTariff("cheap-model", input_price_per_1m=1.0, output_price_per_1m=2.0),
+        ModelTariff("expensive-model", input_price_per_1m=10.0, output_price_per_1m=20.0),
     )
 
     prompt = storage.create_prompt("p")
@@ -174,12 +163,7 @@ def test_missing_tariff_gives_none_cost_but_has_token_count(storage):
     """Тариф удалён после привязки тега — cost=None, token_count сохраняется."""
     _upsert(
         storage,
-        ModelTariff(
-            "no-tariff-model",
-            "fixed-42",
-            input_price_per_1m=1.0,
-            output_price_per_1m=2.0,
-        ),
+        ModelTariff("no-tariff-model", input_price_per_1m=1.0, output_price_per_1m=2.0),
     )
     prompt = storage.create_prompt("p")
     prompt.add_version([("user", "hello")])
@@ -210,12 +194,7 @@ def test_missing_tariff_gives_none_cost_but_has_token_count(storage):
 def test_missing_tokenizer_falls_back_to_word_count(storage):
     _upsert(
         storage,
-        ModelTariff(
-            "unknown-model",
-            "unknown-provider",
-            input_price_per_1m=2.0,
-            output_price_per_1m=4.0,
-        ),
+        ModelTariff("unknown-model", input_price_per_1m=2.0, output_price_per_1m=4.0),
     )
 
     prompt = storage.create_prompt("p")
@@ -264,9 +243,7 @@ def test_prompt_without_model_tags_has_none_costs(storage):
 def test_prompt_without_versions_has_zero_cost(storage):
     _upsert(
         storage,
-        ModelTariff(
-            "some-model", "fixed-999", input_price_per_1m=5.0, output_price_per_1m=10.0
-        ),
+        ModelTariff("some-model", input_price_per_1m=5.0, output_price_per_1m=10.0),
     )
 
     storage.create_prompt("p")
@@ -287,9 +264,7 @@ def test_prompt_without_versions_has_zero_cost(storage):
 def test_multiple_prompts_counted_independently(storage):
     _upsert(
         storage,
-        ModelTariff(
-            "model-x", "fixed-10", input_price_per_1m=1.0, output_price_per_1m=2.0
-        ),
+        ModelTariff("model-x", input_price_per_1m=1.0, output_price_per_1m=2.0),
     )
 
     for i in range(3):

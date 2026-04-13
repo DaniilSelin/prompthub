@@ -360,25 +360,27 @@ class PromptRepo:
         )
         return cast(list[PromptIdRow], self._rows_to_dicts(cur.fetchall()))
 
-    def fetch_tariffs(self, tag_names: list[str]) -> dict[str, TariffRow]:
-        if not tag_names:
+    def fetch_tariffs(self, model_names: list[str]) -> dict[str, TariffRow]:
+        if not model_names:
             return {}
-        placeholders = ",".join("?" * len(tag_names))
-        cur = self.conn.cursor()
-        cur.execute(
-            f"SELECT tag_name, provider, input_price_per_1m, output_price_per_1m "
-            f"FROM model_tariffs WHERE tag_name IN ({placeholders})",
-            tag_names,
-        )
         result: dict[str, TariffRow] = {}
-        for row in self._rows_to_dicts(cur.fetchall()):
-            tag_name = cast(str, row["tag_name"])
-            result[tag_name] = {
-                "tag_name": tag_name,
-                "provider": cast(str, row["provider"]),
-                "input_price_per_1m": float(row["input_price_per_1m"]),
-                "output_price_per_1m": float(row["output_price_per_1m"]),
-            }
+        cur = self.conn.cursor()
+        for name in model_names:
+            cur.execute(
+                "SELECT tag_name, input_price_per_1m, output_price_per_1m "
+                "FROM model_tariffs "
+                "WHERE tag_name = ? OR tag_name LIKE ? "
+                "LIMIT 1",
+                (name, f"%/{name}"),
+            )
+            row = cur.fetchone()
+            if row:
+                d = self._row_to_dict(row)
+                result[name] = {
+                    "tag_name": cast(str, d["tag_name"]),
+                    "input_price_per_1m": float(d["input_price_per_1m"]),
+                    "output_price_per_1m": float(d["output_price_per_1m"]),
+                }
         return result
 
     def fetch_all_tags(self) -> list[TagRow]:

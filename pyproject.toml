@@ -1,6 +1,6 @@
 [project]
 name = "prompthub-my"
-version = "0.1.0"
+version = "0.1.1"
 description = "Prompt version control system built on SQLite"
 readme = "README.md"
 requires-python = ">=3.10"

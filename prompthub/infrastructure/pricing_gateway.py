@@ -48,7 +48,6 @@ class PricingAPIGateway:
         result = []
         for item in items:
             model_id = item.get("id", "")
-            provider = self._extract_provider(model_id)
             pricing = item.get("pricing") or {}
 
             # OpenRouter: значения — строки с ценой за токен в USD.
@@ -62,7 +61,6 @@ class PricingAPIGateway:
             result.append(
                 ModelTariff(
                     tag_name=model_id,
-                    provider=provider,
                     input_price_per_1m=round(input_per_token * _PER_TOKEN_TO_PER_1M, 6),
                     output_price_per_1m=round(
                         output_per_token * _PER_TOKEN_TO_PER_1M, 6
@@ -71,15 +69,3 @@ class PricingAPIGateway:
             )
 
         return result
-
-    @staticmethod
-    def _extract_provider(model_id: str) -> str:
-        """Извлекает имя провайдера из идентификатора модели.
-
-        "openai/gpt-4o"              → "openai"
-        "anthropic/claude-3-5-sonnet" → "anthropic"
-        "gpt-4o"                      → ""   (нет префикса)
-        """
-        if "/" in model_id:
-            return model_id.split("/", 1)[0]
-        return ""

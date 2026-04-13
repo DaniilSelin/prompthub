@@ -17,17 +17,15 @@ class TariffManager:
                 cur.execute(
                     """
                     INSERT INTO model_tariffs
-                        (tag_name, provider, input_price_per_1m, output_price_per_1m, updated_at)
-                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                        (tag_name, input_price_per_1m, output_price_per_1m, updated_at)
+                    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
                     ON CONFLICT(tag_name) DO UPDATE SET
-                        provider           = excluded.provider,
                         input_price_per_1m  = excluded.input_price_per_1m,
                         output_price_per_1m = excluded.output_price_per_1m,
                         updated_at         = CURRENT_TIMESTAMP
                     """,
                     (
                         tariff.tag_name,
-                        tariff.provider,
                         tariff.input_price_per_1m,
                         tariff.output_price_per_1m,
                     ),

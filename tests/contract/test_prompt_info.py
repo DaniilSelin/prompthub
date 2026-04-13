@@ -30,7 +30,6 @@ def test_uc05_002_list_prompts_includes_per_model_token_count_and_cost(storage):
         [
             ModelTariff(
                 tag_name="gpt-4o",
-                provider="openai",
                 input_price_per_1m=2.5,
                 output_price_per_1m=10.0,
             )
