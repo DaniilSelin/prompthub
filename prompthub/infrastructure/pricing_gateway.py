@@ -60,7 +60,7 @@ class PricingAPIGateway:
 
             result.append(
                 ModelTariff(
-                    tag_name=model_id,
+                    tag_name=model_id.strip().lower(),
                     input_price_per_1m=round(input_per_token * _PER_TOKEN_TO_PER_1M, 6),
                     output_price_per_1m=round(
                         output_per_token * _PER_TOKEN_TO_PER_1M, 6

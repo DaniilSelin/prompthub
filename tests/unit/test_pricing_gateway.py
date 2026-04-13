@@ -43,6 +43,16 @@ class TestParse:
         result = gateway._parse(data)
         assert result[0].tag_name == "openai/gpt-4o-mini"
 
+    def test_normalizes_tag_name_to_lowercase(self, gateway):
+        data = self._data(self._model("OpenAI/GPT-4O", "0.0000025", "0.00001"))
+        result = gateway._parse(data)
+        assert result[0].tag_name == "openai/gpt-4o"
+
+    def test_normalizes_tag_name_strips_whitespace(self, gateway):
+        data = self._data(self._model("  openai/gpt-4o  ", "0.0000025", "0.00001"))
+        result = gateway._parse(data)
+        assert result[0].tag_name == "openai/gpt-4o"
+
     def test_parses_multiple_models(self, gateway):
         data = self._data(
             self._model("openai/gpt-4o", "0.0000025", "0.00001"),

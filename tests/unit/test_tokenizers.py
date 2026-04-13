@@ -71,6 +71,18 @@ class TestModelTagBase:
         tag = _WordCountTag("dummy")
         assert tag.get_token_count([]) == 0
 
+    def test_model_name_lowercased(self):
+        tag = _WordCountTag("GPT-4O")
+        assert tag.model_name == "gpt-4o"
+
+    def test_model_name_stripped(self):
+        tag = _WordCountTag("  gpt-4o  ")
+        assert tag.model_name == "gpt-4o"
+
+    def test_model_name_stripped_and_lowercased(self):
+        tag = _WordCountTag("  GPT-4O  ")
+        assert tag.model_name == "gpt-4o"
+
     def test_provider_key_is_defined_on_subclass(self):
         assert OpenAIModelTag.provider_key == "openai"
         assert AnthropicModelTag.provider_key == "anthropic"
@@ -287,8 +299,9 @@ class TestHuggingFaceModelTag:
         result = tag.get_token_count([("user", "hello world")])
 
         assert result == 5
+        # model_name нормализуется в __init__ (strip + lower)
         mock_transformers.AutoTokenizer.from_pretrained.assert_called_once_with(
-            "meta-llama/Llama-3-8B"
+            "meta-llama/llama-3-8b"
         )
 
     def test_tokenizer_is_cached(self, monkeypatch):

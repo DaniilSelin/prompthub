@@ -19,7 +19,7 @@ class ModelTag(ABC):
     provider_key: ClassVar[str]  # определяется в подклассе, например "openai"
 
     def __init__(self, model_name: str):
-        self.model_name = model_name
+        self.model_name = model_name.strip().lower()
 
     @abstractmethod
     def _count_text(self, text: str) -> int:
