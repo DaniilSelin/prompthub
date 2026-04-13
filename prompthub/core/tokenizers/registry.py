@@ -53,10 +53,6 @@ def resolve_tokenizer(model_name: str, provider_key: str) -> ModelTag | None:
     return cls(model_name)
 
 
-def _word_count(messages: Messages) -> int:
-    return sum(len(content.split()) for _, content in messages)
-
-
 def count_tokens_per_model(
     messages: Messages,
     model_tag_rows: list[dict[str, Any]],
@@ -71,7 +67,6 @@ def count_tokens_per_model(
 
     Возвращает словарь {model_name: token_count}.
     """
-    word_count: int | None = None
     result: dict[str, int] = {}
 
     for row in model_tag_rows:
@@ -81,20 +76,16 @@ def count_tokens_per_model(
         tokenizer = resolve_tokenizer(model_name, provider_key)
 
         if tokenizer is None:
-            if word_count is None:
-                word_count = _word_count(messages)
             warnings.warn(
                 f"Нет зарегистрированного токенизатора для провайдера '{provider_key}' "
-                f"(модель '{model_name}'). Используется приближение по словам."
+                f"(модель '{model_name}')."
             )
-            result[model_name] = word_count
+            result[model_name] = 0
             continue
 
         count = tokenizer.get_token_count(messages)
         if count < 0:
-            if word_count is None:
-                word_count = _word_count(messages)
-            result[model_name] = word_count
+            result[model_name] = 0
         else:
             result[model_name] = count
 
