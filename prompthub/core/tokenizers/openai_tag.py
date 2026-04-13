@@ -12,7 +12,7 @@ class OpenAIModelTag(ModelTag):
     способ, рекомендованный OpenAI, учитывающий overhead формата сообщений.
 
     Требует установленного пакета `openai` и переменной окружения OPENAI_API_KEY.
-    При отсутствии любого из них get_token_count вернёт -1 и выдаст предупреждение.
+    При отсутствии любого из них _get_token_count вернёт -1 и выдаст предупреждение.
     """
 
     provider_key = "openai"
@@ -44,10 +44,10 @@ class OpenAIModelTag(ModelTag):
     def _count_text(self, text: str) -> int:
         raise NotImplementedError(
             "OpenAIModelTag считает токены на уровне сообщений через SDK-клиент, "
-            "а не построчно. Используйте get_token_count."
+            "а не построчно. Используйте _get_token_count."
         )
 
-    def get_token_count(self, messages: Messages) -> int:
+    def _get_token_count(self, messages: Messages) -> int:
         """Считает токены через OpenAI SDK (beta.chat.completions.count_tokens).
 
         При отсутствии пакета `openai`, OPENAI_API_KEY или другой ошибке

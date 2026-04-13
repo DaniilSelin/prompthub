@@ -47,13 +47,13 @@ class TestModelTagBase:
         tag = _WordCountTag("dummy")
         messages = [("system", "you are helpful"), ("user", "hello world")]
         # "you are helpful" = 3, "hello world" = 2 → 5
-        assert tag.get_token_count(messages) == 5
+        assert tag._get_token_count(messages) == 5
 
     def test_returns_minus_one_and_warns_on_exception(self):
         tag = _BrokenTag("broken")
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            result = tag.get_token_count([("user", "hello")])
+            result = tag._get_token_count([("user", "hello")])
 
         assert result == -1
         assert len(w) == 1
@@ -63,13 +63,13 @@ class TestModelTagBase:
         tag = _BrokenTag("my-model")
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            tag.get_token_count([("user", "x")])
+            tag._get_token_count([("user", "x")])
         assert "_BrokenTag" in str(w[0].message)
         assert "my-model" in str(w[0].message)
 
     def test_empty_messages_returns_zero(self):
         tag = _WordCountTag("dummy")
-        assert tag.get_token_count([]) == 0
+        assert tag._get_token_count([]) == 0
 
     def test_model_name_lowercased(self):
         tag = _WordCountTag("GPT-4O")
@@ -120,7 +120,7 @@ class TestOpenAIModelTag:
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
         tag = OpenAIModelTag("gpt-4o")
-        result = tag.get_token_count([("user", "hello"), ("assistant", "hi")])
+        result = tag._get_token_count([("user", "hello"), ("assistant", "hi")])
 
         assert result == 17
         mock_client.beta.chat.completions.count_tokens.assert_called_once_with(
@@ -137,9 +137,9 @@ class TestOpenAIModelTag:
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
         tag = OpenAIModelTag("gpt-4o")
-        tag.get_token_count([("user", "first")])
+        tag._get_token_count([("user", "first")])
         client_ref = tag._client
-        tag.get_token_count([("user", "second")])
+        tag._get_token_count([("user", "second")])
         assert tag._client is client_ref
         assert mock_openai.OpenAI.call_count == 1
 
@@ -159,8 +159,8 @@ class TestOpenAIModelTag:
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
         tag = OpenAIModelTag("gpt-4o")
-        short = tag.get_token_count([("user", "Hi")])
-        long = tag.get_token_count([("user", "Hi " * 50)])
+        short = tag._get_token_count([("user", "Hi")])
+        long = tag._get_token_count([("user", "Hi " * 50)])
         assert long > short
 
     def test_returns_minus_one_and_warns_if_api_key_missing(self, monkeypatch):
@@ -173,7 +173,7 @@ class TestOpenAIModelTag:
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            result = tag.get_token_count([("user", "hello")])
+            result = tag._get_token_count([("user", "hello")])
 
         assert result == -1
         assert len(w) == 1
@@ -188,7 +188,7 @@ class TestOpenAIModelTag:
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            result = tag.get_token_count([("user", "hello")])
+            result = tag._get_token_count([("user", "hello")])
 
         assert result == -1
         assert len(w) == 1
@@ -221,7 +221,7 @@ class TestAnthropicModelTag:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
         tag = AnthropicModelTag("claude-3-5-sonnet-20241022")
-        result = tag.get_token_count([("user", "hello"), ("assistant", "hi")])
+        result = tag._get_token_count([("user", "hello"), ("assistant", "hi")])
 
         assert result == 42
         mock_client.messages.count_tokens.assert_called_once_with(
@@ -239,7 +239,7 @@ class TestAnthropicModelTag:
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            result = AnthropicModelTag().get_token_count([("user", "hello")])
+            result = AnthropicModelTag()._get_token_count([("user", "hello")])
 
         assert result == -1
         assert len(w) == 1
@@ -250,7 +250,7 @@ class TestAnthropicModelTag:
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            result = AnthropicModelTag().get_token_count([("user", "hello")])
+            result = AnthropicModelTag()._get_token_count([("user", "hello")])
 
         assert result == -1
         assert len(w) == 1
@@ -272,8 +272,8 @@ class TestAnthropicModelTag:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
         tag = AnthropicModelTag()
-        short = tag.get_token_count([("user", "Hi")])
-        long = tag.get_token_count([("user", "Hi " * 50)])
+        short = tag._get_token_count([("user", "Hi")])
+        long = tag._get_token_count([("user", "Hi " * 50)])
         assert long > short
 
 
@@ -296,7 +296,7 @@ class TestHuggingFaceModelTag:
         monkeypatch.setitem(sys.modules, "transformers", mock_transformers)
 
         tag = HuggingFaceModelTag("meta-llama/Llama-3-8B")
-        result = tag.get_token_count([("user", "hello world")])
+        result = tag._get_token_count([("user", "hello world")])
 
         assert result == 5
         # model_name нормализуется в __init__ (strip + lower)
@@ -309,8 +309,8 @@ class TestHuggingFaceModelTag:
         monkeypatch.setitem(sys.modules, "transformers", mock_transformers)
 
         tag = HuggingFaceModelTag("some/model")
-        tag.get_token_count([("user", "a")])
-        tag.get_token_count([("user", "b")])
+        tag._get_token_count([("user", "a")])
+        tag._get_token_count([("user", "b")])
 
         assert mock_transformers.AutoTokenizer.from_pretrained.call_count == 1
 
@@ -321,7 +321,7 @@ class TestHuggingFaceModelTag:
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            result = tag.get_token_count([("user", "hello")])
+            result = tag._get_token_count([("user", "hello")])
 
         assert result == -1
         assert len(w) == 1
@@ -371,7 +371,7 @@ class TestRegistry:
         result = reg.count_tokens_per_model([("user", "anything")], rows)
         assert result == {"model-a": 10, "model-b": 20}
 
-    def test_falls_back_to_word_count_for_unknown_provider(self):
+    def test_returns_zero_for_unknown_provider(self):
         rows = [{"name": "unknown-model", "provider": "unknown-provider"}]
         messages = [("user", "hello world")]
 
@@ -379,10 +379,10 @@ class TestRegistry:
             warnings.simplefilter("always")
             result = reg.count_tokens_per_model(messages, rows)
 
-        assert result["unknown-model"] == 2
+        assert result["unknown-model"] == 0
         assert any("unknown-provider" in str(x.message) for x in w)
 
-    def test_minus_one_from_tokenizer_falls_back_to_word_count(self, monkeypatch):
+    def test_minus_one_from_tokenizer_returns_zero(self, monkeypatch):
         monkeypatch.setitem(reg._PROVIDER_REGISTRY, "broken-test", _BrokenTag)
         rows = [{"name": "broken", "provider": "broken-test"}]
         messages = [("user", "one two three")]
@@ -391,7 +391,7 @@ class TestRegistry:
             warnings.simplefilter("always")
             result = reg.count_tokens_per_model(messages, rows)
 
-        assert result["broken"] == 3
+        assert result["broken"] == 0
 
     def test_each_model_gets_independent_count(self, monkeypatch):
         class LenTag(ModelTag):

@@ -9,7 +9,7 @@ class AnthropicModelTag(ModelTag):
     """Подсчёт токенов для моделей Anthropic (Claude) через официальный SDK.
 
     Требует установленного пакета `anthropic` и переменной окружения
-    ANTHROPIC_API_KEY. При отсутствии любого из них get_token_count вернёт -1
+    ANTHROPIC_API_KEY. При отсутствии любого из них _get_token_count вернёт -1
     и выдаст предупреждение (стандартное поведение базового класса).
 
     Использует messages.count_tokens — официальный API Anthropic, который
@@ -24,10 +24,10 @@ class AnthropicModelTag(ModelTag):
     def _count_text(self, text: str) -> int:
         raise NotImplementedError(
             "AnthropicModelTag считает токены на уровне сообщений через SDK, "
-            "а не построчно. Используйте get_token_count."
+            "а не построчно. Используйте _get_token_count."
         )
 
-    def get_token_count(self, messages: Messages) -> int:
+    def _get_token_count(self, messages: Messages) -> int:
         """Считает токены через Anthropic SDK (messages.count_tokens).
 
         При отсутствии ANTHROPIC_API_KEY, пакета `anthropic`, недоступном API

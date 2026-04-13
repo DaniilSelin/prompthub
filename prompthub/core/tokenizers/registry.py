@@ -83,7 +83,7 @@ def count_tokens_per_model(
             result[model_name] = 0
             continue
 
-        count = tokenizer.get_token_count(messages)
+        count = tokenizer._get_token_count(messages)
         if count < 0:
             result[model_name] = 0
         else:
