@@ -32,10 +32,15 @@ class Storage(QueryFactory):
 
     def __init__(self, path: str):
         self.storage_path: Path = Path(path)
-        self._conn = sqlite3.connect(self.storage_path, check_same_thread=False)
-        self._conn.row_factory = sqlite3.Row
-        self._conn.execute("PRAGMA journal_mode=WAL")
-        self._conn.execute("PRAGMA foreign_keys=ON")
+        try:
+            self._conn = sqlite3.connect(self.storage_path, check_same_thread=False)
+            self._conn.row_factory = sqlite3.Row
+            self._conn.execute("PRAGMA journal_mode=WAL")
+            self._conn.execute("PRAGMA foreign_keys=ON")
+        except sqlite3.OperationalError as e:
+            raise RuntimeError(f"Не удалось открыть базу данных '{path}': {e}") from e
+        except sqlite3.DatabaseError as e:
+            raise RuntimeError(f"Файл '{path}' не является валидной базой SQLite: {e}") from e
 
         self.repo = PromptRepo(self._conn)
 

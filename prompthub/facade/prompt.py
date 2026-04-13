@@ -297,8 +297,18 @@ class Prompt(QueryFactory):
         self.repo.add_tag(self.id, value, TAG_PROMPT_TYPE, commit=commit)
 
     def remove_prompt_tag(self, tag: PromptTag | str, commit: bool = True) -> None:
-        """Отвязывает PromptTag от промпта."""
+        """Отвязывает PromptTag от промпта.
+
+        Если тег не был привязан — выдаёт предупреждение и пропускает (ВИ-10, альт. 4а).
+        """
         value = tag.value if hasattr(tag, "value") else str(tag)
+        current = self.repo.fetch_current_prompt_tags(self.id)
+        if value not in current:
+            warnings.warn(
+                f"Тег '{value}': не привязан к промпту — пропущен",
+                stacklevel=2,
+            )
+            return
         self.repo.remove_tag(self.id, value, TAG_PROMPT_TYPE, commit=commit)
 
     def _assemble(self, target_seq: int) -> str:
@@ -369,6 +379,12 @@ class Prompt(QueryFactory):
           - deleted — сообщения, присутствующие только в seq_a
           - changed — сообщения с изменённым content (при совпадении роли по позиции)
         """
+        if seq_a == seq_b:
+            warnings.warn(
+                f"Сравниваемые версии идентичны: seq_a == seq_b == {seq_a}",
+                stacklevel=2,
+            )
+
         msgs_a = self.get_version_content(seq_a)
         msgs_b = self.get_version_content(seq_b)
 
