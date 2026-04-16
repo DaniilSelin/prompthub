@@ -1,5 +1,5 @@
 """
-Интеграционные тесты для подсчёта стоимости промптов.
+Интеграционные тесты для подсчета стоимости промптов.
 Покрывает: per-model token_count, per-model cost, отсутствие тарифа, отсутствие токенизатора.
 """
 
@@ -135,7 +135,9 @@ def test_cost_computed_from_own_token_count(storage):
     _upsert(
         storage,
         ModelTariff("cheap-model", input_price_per_1m=1.0, output_price_per_1m=2.0),
-        ModelTariff("expensive-model", input_price_per_1m=10.0, output_price_per_1m=20.0),
+        ModelTariff(
+            "expensive-model", input_price_per_1m=10.0, output_price_per_1m=20.0
+        ),
     )
 
     prompt = storage.create_prompt("p")
@@ -154,13 +156,13 @@ def test_cost_computed_from_own_token_count(storage):
 
 
 # ---------------------------------------------------------------------------
-# TC-COST-03: отсутствие тарифа → cost=None, token_count есть
+# TC-COST-03: отсутствие тарифа -> cost=None, token_count есть
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.integration
 def test_missing_tariff_gives_none_cost_but_has_token_count(storage):
-    """Тариф удалён после привязки тега — cost=None, token_count сохраняется."""
+    """Тариф удален после привязки тега - cost=None, token_count сохраняется."""
     _upsert(
         storage,
         ModelTariff("no-tariff-model", input_price_per_1m=1.0, output_price_per_1m=2.0),
@@ -169,7 +171,7 @@ def test_missing_tariff_gives_none_cost_but_has_token_count(storage):
     prompt.add_version([("user", "hello")])
     storage.add_model_tags("p", [_Fixed42Tag("no-tariff-model")])
 
-    # Удаляем тариф — имитируем ситуацию устаревших данных
+    # Удаляем тариф - имитируем ситуацию устаревших данных
     storage._conn.execute(
         "DELETE FROM model_tariffs WHERE tag_name = 'no-tariff-model'"
     )
@@ -186,7 +188,7 @@ def test_missing_tariff_gives_none_cost_but_has_token_count(storage):
 
 
 # ---------------------------------------------------------------------------
-# TC-COST-04: отсутствие токенизатора → word-count fallback + предупреждение
+# TC-COST-04: отсутствие токенизатора -> word-count fallback + предупреждение
 # ---------------------------------------------------------------------------
 
 
@@ -200,7 +202,7 @@ def test_missing_tokenizer_falls_back_to_word_count(storage):
     prompt = storage.create_prompt("p")
     prompt.add_version([("user", "hello world"), ("system", "be helpful")])
 
-    # Создаём ModelTag с неизвестным провайдером для теста
+    # Создаем ModelTag с неизвестным провайдером для теста
     class _UnknownProviderTag(ModelTag):
         provider_key = "unknown-provider"
 
@@ -221,7 +223,7 @@ def test_missing_tokenizer_falls_back_to_word_count(storage):
 
 
 # ---------------------------------------------------------------------------
-# TC-COST-05: промпт без model_tags → costs = None
+# TC-COST-05: промпт без model_tags -> costs = None
 # ---------------------------------------------------------------------------
 
 
@@ -235,7 +237,7 @@ def test_prompt_without_model_tags_has_none_costs(storage):
 
 
 # ---------------------------------------------------------------------------
-# TC-COST-06: промпт без версий → нулевые токены и нулевая стоимость
+# TC-COST-06: промпт без версий -> нулевые токены и нулевая стоимость
 # ---------------------------------------------------------------------------
 
 
@@ -256,7 +258,7 @@ def test_prompt_without_versions_has_zero_cost(storage):
 
 
 # ---------------------------------------------------------------------------
-# TC-COST-07: несколько промптов — каждый считается независимо
+# TC-COST-07: несколько промптов - каждый считается независимо
 # ---------------------------------------------------------------------------
 
 

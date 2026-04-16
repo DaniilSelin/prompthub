@@ -38,7 +38,7 @@ class _DummyAdapter(LLMAdapter):
 
 
 def _make_mock_langchain():
-    """Создаёт мок ChatPromptTemplate для тестов без установленного langchain-core."""
+    """Создает мок ChatPromptTemplate для тестов без установленного langchain-core."""
     mock_template = MagicMock()
     mock_template.__class__.__name__ = "ChatPromptTemplate"
 
@@ -70,7 +70,9 @@ def test_langchain_adapter_serialize_returns_chat_prompt_template(monkeypatch):
     mock_langchain_core.prompts = mock_langchain_core_prompts
 
     monkeypatch.setitem(sys.modules, "langchain_core", mock_langchain_core)
-    monkeypatch.setitem(sys.modules, "langchain_core.prompts", mock_langchain_core_prompts)
+    monkeypatch.setitem(
+        sys.modules, "langchain_core.prompts", mock_langchain_core_prompts
+    )
 
     from prompthub.core.adapters.langchain import LangChainAdapter
 
@@ -82,7 +84,7 @@ def test_langchain_adapter_serialize_returns_chat_prompt_template(monkeypatch):
     )
     result = adapter.serialize(prompt)
 
-    # from_messages вызван с туплами (role, content) — без конкретных классов сообщений
+    # from_messages вызван с туплами (role, content) - без конкретных классов сообщений
     mock_ChatPromptTemplate.from_messages.assert_called_once_with(
         [("system", "You are helpful"), ("user", "Hello")]
     )
@@ -90,7 +92,7 @@ def test_langchain_adapter_serialize_returns_chat_prompt_template(monkeypatch):
 
 
 def test_langchain_adapter_deserialize_from_chat_prompt_template(monkeypatch):
-    """deserialize() из ChatPromptTemplate через format_messages() — duck-typing."""
+    """deserialize() из ChatPromptTemplate через format_messages() - duck-typing."""
     mock_template = _make_mock_langchain()
 
     mock_langchain_core_prompts = MagicMock()
@@ -98,12 +100,14 @@ def test_langchain_adapter_deserialize_from_chat_prompt_template(monkeypatch):
     mock_langchain_core.prompts = mock_langchain_core_prompts
 
     monkeypatch.setitem(sys.modules, "langchain_core", mock_langchain_core)
-    monkeypatch.setitem(sys.modules, "langchain_core.prompts", mock_langchain_core_prompts)
+    monkeypatch.setitem(
+        sys.modules, "langchain_core.prompts", mock_langchain_core_prompts
+    )
 
     from prompthub.core.adapters.langchain import LangChainAdapter
 
     adapter = LangChainAdapter()
-    # mock_template имеет .format_messages() — работает как ChatPromptTemplate
+    # mock_template имеет .format_messages() - работает как ChatPromptTemplate
     result = adapter.deserialize(mock_template, name="test", version=2)
 
     assert result.name == "test"
@@ -118,7 +122,9 @@ def test_langchain_adapter_deserialize_from_tuples(monkeypatch):
     mock_langchain_core.prompts = mock_langchain_core_prompts
 
     monkeypatch.setitem(sys.modules, "langchain_core", mock_langchain_core)
-    monkeypatch.setitem(sys.modules, "langchain_core.prompts", mock_langchain_core_prompts)
+    monkeypatch.setitem(
+        sys.modules, "langchain_core.prompts", mock_langchain_core_prompts
+    )
 
     from prompthub.core.adapters.langchain import LangChainAdapter
 

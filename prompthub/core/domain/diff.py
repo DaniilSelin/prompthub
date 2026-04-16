@@ -3,22 +3,24 @@ from dataclasses import dataclass, field
 
 @dataclass
 class ChangedMessage:
-    """Сообщение, присутствующее в обеих версиях, но с изменённым content."""
-    index: int       # индекс в списке сообщений (позиция)
-    role: str        # роль сообщения (совпадает в обеих версиях)
+    """Сообщение, присутствующее в обеих версиях, но с измененным content."""
+
+    index: int
+    role: str
     old_content: str
     new_content: str
-    line_diff: list[str] = field(default_factory=list)  # unified diff строки content
+    line_diff: list[str] = field(default_factory=list)
 
 
 @dataclass
 class StructuredDiff:
     """Структурный diff между двумя версиями промпта на уровне сообщений (ВИ-7)."""
+
     name_a: str
     name_b: str
-    added: list[tuple[str, str]] = field(default_factory=list)    # (role, content) — только в name_b
-    deleted: list[tuple[str, str]] = field(default_factory=list)  # (role, content) — только в name_a
-    changed: list[ChangedMessage] = field(default_factory=list)   # изменены content при той же роли
+    added: list[tuple[str, str]] = field(default_factory=list)
+    deleted: list[tuple[str, str]] = field(default_factory=list)
+    changed: list[ChangedMessage] = field(default_factory=list)
 
     @property
     def has_changes(self) -> bool:
@@ -29,7 +31,7 @@ class StructuredDiff:
 class VersionLineDiff:
     name_a: str
     name_b: str
-    hunks: list[str] = field(default_factory=list)  # строки unified diff
+    hunks: list[str] = field(default_factory=list)
 
     @property
     def has_changes(self) -> bool:
@@ -41,13 +43,13 @@ class VersionLineDiff:
 
 @dataclass
 class DiffChunk:
-    tag: str  # 'equal' | 'insert' | 'delete' | 'replace'
-    old_start: int  # позиция в content_a
+    tag: str
+    old_start: int
     old_end: int
-    new_start: int  # позиция в content_b
+    new_start: int
     new_end: int
-    old_text: str  # фрагмент из version_a (пусто для 'insert')
-    new_text: str  # фрагмент из version_b (пусто для 'delete')
+    old_text: str
+    new_text: str
 
 
 @dataclass

@@ -8,7 +8,7 @@ from prompthub.facade.prompt import Prompt, PromptVersion
 from prompthub.repository.types import TagRow
 
 if TYPE_CHECKING:
-    from prompthub.core.domain.diff import StructuredDiff, VersionDiff, VersionLineDiff
+    from prompthub.core.domain.diff import StructuredDiff
     from prompthub.core.domain.tag import PromptTag
     from prompthub.core.tokenizers.base import ModelTag
 
@@ -34,12 +34,7 @@ class LangChainPromptAdapter:
         self._prompt = prompt
         self._adapter = LangChainAdapter()
 
-    # ------------------------------------------------------------------
-    # Методы с конвертацией контента
-    # ------------------------------------------------------------------
-
     def get_version_content(self, version_seq: int) -> Any:
-        """Возвращает контент версии как ChatPromptTemplate."""
         raw = self._prompt.get_version_content(version_seq)
         return self._adapter.serialize(
             PromptMessages(name="", version=version_seq, content=raw)
@@ -51,21 +46,13 @@ class LangChainPromptAdapter:
         description: str | None = None,
         commit: bool = True,
     ) -> int:
-        """Добавляет новую версию.
 
-        Принимает ChatPromptTemplate или list[tuple[str, str]].
-        ChatPromptTemplate конвертируется обратно в сырой формат.
-        """
         if _is_chat_prompt_template(content):
             pm = self._adapter.deserialize(content)
             raw = pm.content
         else:
             raw = content
         return self._prompt.add_version(raw, description, commit=commit)
-
-    # ------------------------------------------------------------------
-    # Делегирование — версии
-    # ------------------------------------------------------------------
 
     def list_versions(self) -> list[PromptVersion]:
         return self._prompt.list_versions()
@@ -82,29 +69,8 @@ class LangChainPromptAdapter:
             description=description,
         )
 
-    def rollback_hard(
-        self,
-        target_seq: int | None = None,
-        steps_back: int | None = None,
-    ) -> PromptVersion:
-        return self._prompt.rollback_hard(target_seq=target_seq, steps_back=steps_back)
-
-    # ------------------------------------------------------------------
-    # Делегирование — сравнение версий
-    # ------------------------------------------------------------------
-
-    def compare_versions(self, seq_a: int, seq_b: int) -> "VersionLineDiff":
-        return self._prompt.compare_versions(seq_a, seq_b)
-
-    def compare_versions_chars(self, seq_a: int, seq_b: int) -> "VersionDiff":
-        return self._prompt.compare_versions_chars(seq_a, seq_b)
-
     def compare_versions_structured(self, seq_a: int, seq_b: int) -> "StructuredDiff":
         return self._prompt.compare_versions_structured(seq_a, seq_b)
-
-    # ------------------------------------------------------------------
-    # Делегирование — теги
-    # ------------------------------------------------------------------
 
     def list_tags(self) -> list[TagRow]:
         return self._prompt.list_tags()
@@ -121,10 +87,6 @@ class LangChainPromptAdapter:
     def remove_model_tag(self, model_tag: "ModelTag") -> None:
         return self._prompt.remove_model_tag(model_tag)
 
-    # ------------------------------------------------------------------
-    # Свойства
-    # ------------------------------------------------------------------
-
     @property
     def id(self) -> int:
         return self._prompt.id
@@ -134,6 +96,5 @@ class LangChainPromptAdapter:
 
 
 def _is_chat_prompt_template(obj: Any) -> bool:
-    """Проверяет, является ли объект ChatPromptTemplate (без жёсткого импорта)."""
     cls_name = type(obj).__name__
     return cls_name == "ChatPromptTemplate"

@@ -1,5 +1,5 @@
 """
-Юнит-тесты для системы подсчёта токенов.
+Юнит-тесты для системы подсчета токенов.
 Покрывает: базовый класс ModelTag, конкретные провайдеры, реестр провайдеров.
 """
 
@@ -46,7 +46,7 @@ class TestModelTagBase:
     def test_sums_only_content_fields_ignores_role(self):
         tag = _WordCountTag("dummy")
         messages = [("system", "you are helpful"), ("user", "hello world")]
-        # "you are helpful" = 3, "hello world" = 2 → 5
+        # "you are helpful" = 3, "hello world" = 2 -> 5
         assert tag._get_token_count(messages) == 5
 
     def test_returns_minus_one_and_warns_on_exception(self):

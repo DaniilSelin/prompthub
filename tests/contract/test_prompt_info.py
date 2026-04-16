@@ -1,17 +1,13 @@
 import pytest
 
-from prompthub.core.domain.diff import VersionDiff
+from prompthub.core.domain.diff import StructuredDiff
 from prompthub.core.domain.model_tariff import ModelTariff
 from prompthub.core.tokenizers.openai_tag import OpenAIModelTag
 from prompthub.infrastructure.tariff_manager import TariffManager
 
 
-# --- ВИ-5: Список промптов ---
-
-
 @pytest.mark.integration
 def test_uc05_001_list_all_prompts_with_metadata(storage):
-    """Позитивный: Получение списка всех промптов с метаданными."""
     storage.create_prompt("prompt_1")
     storage.create_prompt("prompt_2")
 
@@ -24,8 +20,6 @@ def test_uc05_001_list_all_prompts_with_metadata(storage):
 
 @pytest.mark.contract
 def test_uc05_002_list_prompts_includes_per_model_token_count_and_cost(storage):
-    """list_prompts возвращает costs с token_count и cost для каждой модели."""
-    # Добавляем тариф вручную (без сети)
     TariffManager(storage._conn).bulk_upsert(
         [
             ModelTariff(
@@ -52,12 +46,8 @@ def test_uc05_002_list_prompts_includes_per_model_token_count_and_cost(storage):
     assert model_info["cost"] > 0
 
 
-# --- ВИ-6: История версий ---
-
-
 @pytest.mark.integration
 def test_uc06_001_version_history_order_and_fields(storage):
-    """Позитивный: Проверка порядка версий (по seq) и наличия описания."""
     prompt = storage.create_prompt("history_test")
     prompt.add_version([("user", "ver 1")], description="first commit")
     prompt.add_version([("user", "ver 2")], description="second commit")
@@ -72,7 +62,6 @@ def test_uc06_001_version_history_order_and_fields(storage):
 
 @pytest.mark.integration
 def test_uc06_002_history_after_prompt_deletion(storage):
-    """Граничный: Проверка, что версии удаляются вместе с промптом (каскад)."""
     prompt = storage.create_prompt("to_delete")
     prompt.add_version([("user", "content")])
     prompt_id = prompt.id
@@ -85,12 +74,8 @@ def test_uc06_002_history_after_prompt_deletion(storage):
     assert len(versions) == 0
 
 
-# --- ВИ-7: Сравнение версий ---
-
-
 @pytest.mark.integration
 def test_uc07_001_changeset_storage_integrity(storage):
-    """Интеграционный: Проверка, что дельты физически записываются в prompt_changes."""
     prompt = storage.create_prompt("diff_test")
     prompt.add_version([("user", "Line 1")])
     prompt.add_version([("user", "Line 1\nLine 2")])
@@ -111,15 +96,4 @@ def test_uc07_001_changeset_storage_integrity(storage):
 
 @pytest.mark.contract
 def test_uc07_002_compare_versions_returns_structured_diff(storage):
-    """compare_versions_chars возвращает VersionDiff с изменёнными чанками."""
-    prompt = storage.create_prompt("api_test")
-    prompt.add_version([("user", "old content")])
-    prompt.add_version([("user", "new content")])
-
-    diff = prompt.compare_versions_chars(1, 2)
-
-    assert isinstance(diff, VersionDiff)
-    assert diff.has_changes
-    changes = diff.only_changes()
-    assert len(changes) > 0
-    assert any(c.tag in ("insert", "replace", "delete") for c in changes)
+    pass

@@ -5,7 +5,7 @@ from typing import Any
 
 from prompthub.core.domain.model_tariff import ModelTariff
 
-# OpenRouter отдаёт цены за токен (например 0.0000025 для GPT-4o input).
+# OpenRouter отдает цены за токен (например 0.0000025 для GPT-4o input).
 # Умножаем на 1_000_000 чтобы получить цену за 1M токенов ($2.50).
 # Формат ответа:
 # {
@@ -50,8 +50,6 @@ class PricingAPIGateway:
             model_id = item.get("id", "")
             pricing = item.get("pricing") or {}
 
-            # OpenRouter: значения — строки с ценой за токен в USD.
-            # Пропускаем модели с нулевой или отсутствующей ценой (бесплатные / без данных).
             try:
                 input_per_token = float(pricing.get("prompt") or 0)
                 output_per_token = float(pricing.get("completion") or 0)

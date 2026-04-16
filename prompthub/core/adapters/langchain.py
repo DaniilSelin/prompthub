@@ -5,7 +5,7 @@ from prompthub.core.domain.prompt_messages import PromptMessages
 
 
 class LangChainAdapter(LLMAdapter):
-    """Адаптер для LangChain — конвертирует PromptMessages в ChatPromptTemplate.
+    """Адаптер для LangChain - конвертирует PromptMessages в ChatPromptTemplate.
 
     Использует ChatPromptTemplate.from_messages() с кортежами (role, content),
     без явного импорта конкретных классов AIMessage/HumanMessage/SystemMessage.
@@ -23,11 +23,6 @@ class LangChainAdapter(LLMAdapter):
         return ChatPromptTemplate
 
     def serialize(self, prompt: PromptMessages) -> Any:
-        """Конвертирует PromptMessages в ChatPromptTemplate.
-
-        Использует нативный role-based формат from_messages() с кортежами,
-        без конкретных классов сообщений.
-        """
         ChatPromptTemplate = self._import_chat_prompt_template()
         return ChatPromptTemplate.from_messages(prompt.content)
 
@@ -38,7 +33,6 @@ class LangChainAdapter(LLMAdapter):
         name: str = "imported_prompt",
         version: int = 1,
     ) -> PromptMessages:
-        """Конвертирует ChatPromptTemplate или список кортежей обратно в PromptMessages."""
         self._import_chat_prompt_template()  # проверяем наличие langchain-core
 
         content: list[tuple[str, str]] = []
@@ -50,7 +44,6 @@ class LangChainAdapter(LLMAdapter):
         )
 
         if is_template:
-            # Форматируем без переменных — статичный шаблон
             messages = payload.format_messages()
             _type_to_role = {
                 "system": "system",
@@ -62,7 +55,9 @@ class LangChainAdapter(LLMAdapter):
                 role = _type_to_role.get(msg_type, msg_type)
                 text = getattr(msg, "content", None)
                 if not isinstance(role, str) or not isinstance(text, str):
-                    raise ValueError(f"Некорректное сообщение ChatPromptTemplate #{idx}")
+                    raise ValueError(
+                        f"Некорректное сообщение ChatPromptTemplate #{idx}"
+                    )
                 content.append((role, text))
 
         elif isinstance(payload, list):
@@ -74,7 +69,11 @@ class LangChainAdapter(LLMAdapter):
                     text = item.get("content")
                 else:
                     msg_type = getattr(item, "type", None)
-                    _type_to_role = {"system": "system", "human": "user", "ai": "assistant"}
+                    _type_to_role = {
+                        "system": "system",
+                        "human": "user",
+                        "ai": "assistant",
+                    }
                     role = _type_to_role.get(msg_type, msg_type)
                     text = getattr(item, "content", None)
 

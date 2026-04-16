@@ -23,9 +23,8 @@ def _load_huggingface_tag() -> type[ModelTag]:
     return HuggingFaceModelTag
 
 
-# Неизменяемый реестр провайдеров: provider_key → класс токенизатора.
-# Для добавления нового провайдера достаточно добавить строку здесь —
-# схема БД при этом не меняется (provider хранится как TEXT).
+# Неизменяемый реестр провайдеров: provider_key -> класс токенизатора.
+# Для добавления нового провайдера достаточно добавить строку здесь.
 _PROVIDER_REGISTRY: dict[str, type[ModelTag] | Callable[[], type[ModelTag]]] = {
     "openai": _load_openai_tag,
     "anthropic": _load_anthropic_tag,
@@ -34,7 +33,7 @@ _PROVIDER_REGISTRY: dict[str, type[ModelTag] | Callable[[], type[ModelTag]]] = {
 
 
 def resolve_tokenizer(model_name: str, provider_key: str) -> ModelTag | None:
-    """Создаёт экземпляр токенизатора по имени модели и ключу провайдера.
+    """Создает экземпляр токенизатора по имени модели и ключу провайдера.
 
     Возвращает None, если провайдер не зарегистрирован.
     """
@@ -57,9 +56,9 @@ def count_tokens_per_model(
     messages: Messages,
     model_tag_rows: list[dict[str, Any]],
 ) -> dict[str, int]:
-    """Считает токены для каждой модели её собственным токенизатором.
+    """Считает токены для каждой модели ее собственным токенизатором.
 
-    Аргумент model_tag_rows — список словарей с ключами 'name' и 'provider',
+    Аргумент model_tag_rows - список словарей с ключами 'name' и 'provider',
     полученных из БД. Пример: [{"name": "gpt-4o", "provider": "openai"}, ...]
 
     Если провайдер не зарегистрирован или токенизатор вернул ошибку (-1),

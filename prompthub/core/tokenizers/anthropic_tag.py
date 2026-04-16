@@ -6,13 +6,13 @@ from prompthub.core.tokenizers.base import Messages, ModelTag
 
 
 class AnthropicModelTag(ModelTag):
-    """Подсчёт токенов для моделей Anthropic (Claude) через официальный SDK.
+    """Подсчет токенов для моделей Anthropic (Claude) через официальный SDK.
 
     Требует установленного пакета `anthropic` и переменной окружения
-    ANTHROPIC_API_KEY. При отсутствии любого из них _get_token_count вернёт -1
+    ANTHROPIC_API_KEY. При отсутствии любого из них _get_token_count вернет -1
     и выдаст предупреждение (стандартное поведение базового класса).
 
-    Использует messages.count_tokens — официальный API Anthropic, который
+    Использует messages.count_tokens - официальный API Anthropic, который
     учитывает overhead формата (роли, разделители).
     """
 
@@ -31,7 +31,7 @@ class AnthropicModelTag(ModelTag):
         """Считает токены через Anthropic SDK (messages.count_tokens).
 
         При отсутствии ANTHROPIC_API_KEY, пакета `anthropic`, недоступном API
-        или другой ошибке выдаёт предупреждение и возвращает -1.
+        или другой ошибке выдает предупреждение и возвращает -1.
         """
         try:
             import anthropic
@@ -55,6 +55,6 @@ class AnthropicModelTag(ModelTag):
         except Exception as e:
             warnings.warn(
                 f"[{self.__class__.__name__}:{self.model_name}] "
-                f"ошибка подсчёта токенов: {e}"
+                f"ошибка подсчета токенов: {e}"
             )
             return -1

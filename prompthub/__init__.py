@@ -1,14 +1,11 @@
-"""PromptHub — prompt version control system built on SQLite.
+"""PromptHub - prompt version control system built on SQLite.
 
 Quickstart
-----------
     from prompthub import Storage
 
     store = Storage("prompts.db")
     prompt = store.create_prompt("my-prompt")
     prompt.add_version([("system", "You are helpful."), ("user", "Hello")])
-
-Optional extras
 ---------------
 Install only what you need::
 

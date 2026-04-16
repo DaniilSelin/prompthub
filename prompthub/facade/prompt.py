@@ -5,10 +5,7 @@ import warnings
 
 from prompthub.core.domain.diff import (
     ChangedMessage,
-    DiffChunk,
     StructuredDiff,
-    VersionDiff,
-    VersionLineDiff,
 )
 from prompthub.core.domain.operations import (
     DeleteOperation,
@@ -18,7 +15,12 @@ from prompthub.core.domain.operations import (
 )
 from prompthub.core.domain.tag import PromptTag
 from prompthub.core.tokenizers.base import ModelTag
-from prompthub.repository import SNAPSHOT_INTERVAL, TAG_MODEL_TYPE, TAG_PROMPT_TYPE, Fields
+from prompthub.repository import (
+    SNAPSHOT_INTERVAL,
+    TAG_MODEL_TYPE,
+    TAG_PROMPT_TYPE,
+    Fields,
+)
 from prompthub.repository.queries import BaseQuery
 from prompthub.repository.query_factory import QueryFactory
 from prompthub.repository.repo import PromptRepo
@@ -143,7 +145,7 @@ class Prompt(QueryFactory):
         if not commit:
             return _insert_once()
 
-        # Если транзакция уже открыта выше по стеку — не начинаем новую.
+        # Если транзакция уже открыта выше по стеку - не начинаем новую.
         if self.repo.conn.in_transaction:
             return _insert_once()
 
@@ -164,32 +166,6 @@ class Prompt(QueryFactory):
                 raise
 
         raise RuntimeError("Не удалось добавить версию из-за конкурентной записи")
-
-    def rollback_hard(
-        self,
-        target_seq: int | None = None,
-        steps_back: int | None = None,
-    ) -> "PromptVersion":
-        versions = self.list_versions()
-        if not versions:
-            raise ValueError("Нет версий для отката")
-
-        if target_seq is not None:
-            target = next((v for v in versions if v.seq == target_seq), None)
-            if not target:
-                raise ValueError(f"Версия seq={target_seq} не найдена")
-        elif steps_back is not None:
-            if steps_back < 0 or steps_back >= len(versions):
-                raise ValueError(f"Некорректное количество шагов: {steps_back}")
-            target = versions[-(steps_back + 1)]
-        else:
-            raise ValueError("Нужно указать target_seq или steps_back")
-
-        for v in reversed(versions):
-            if v.seq > target.seq:
-                self.repo.delete_version(v.id)
-
-        return target
 
     def rollback(
         self,
@@ -226,7 +202,7 @@ class Prompt(QueryFactory):
         # ВИ-8, альт. 7а: если содержимое целевой версии идентично актуальной
         if result_id == latest_id:
             warnings.warn(
-                f"Already at target state: откат на seq={target.seq} не нужен — "
+                f"Already at target state: откат на seq={target.seq} не нужен - "
                 f"содержимое идентично актуальной версии.",
                 stacklevel=2,
             )
@@ -273,39 +249,29 @@ class Prompt(QueryFactory):
         ]
 
     def add_model_tag(self, model_tag: ModelTag) -> None:
-        """Привязывает ModelTag к промпту. Провайдер определяется из класса объекта."""
         provider_key = type(model_tag).provider_key
         self.repo.add_tag(self.id, model_tag.model_name, TAG_MODEL_TYPE, provider_key)
 
     def remove_model_tag(self, model_tag: ModelTag) -> None:
-        """Отвязывает ModelTag от промпта."""
         self.repo.remove_tag(self.id, model_tag.model_name, TAG_MODEL_TYPE)
 
     def add_prompt_tag(self, tag: PromptTag | str, commit: bool = True) -> None:
-        """Привязывает PromptTag (категорийный тег) к промпту.
-
-        Если тег уже привязан — выдаёт предупреждение и пропускает (ВИ-9, альт. 4а).
-        """
         value = tag.value if hasattr(tag, "value") else str(tag)
         current = self.repo.fetch_current_prompt_tags(self.id)
         if value in current:
             warnings.warn(
-                f"Тег '{value}': уже привязан к промпту — пропущен",
+                f"Тег '{value}': уже привязан к промпту - пропущен",
                 stacklevel=2,
             )
             return
         self.repo.add_tag(self.id, value, TAG_PROMPT_TYPE, commit=commit)
 
     def remove_prompt_tag(self, tag: PromptTag | str, commit: bool = True) -> None:
-        """Отвязывает PromptTag от промпта.
-
-        Если тег не был привязан — выдаёт предупреждение и пропускает (ВИ-10, альт. 4а).
-        """
         value = tag.value if hasattr(tag, "value") else str(tag)
         current = self.repo.fetch_current_prompt_tags(self.id)
         if value not in current:
             warnings.warn(
-                f"Тег '{value}': не привязан к промпту — пропущен",
+                f"Тег '{value}': не привязан к промпту - пропущен",
                 stacklevel=2,
             )
             return
@@ -330,55 +296,7 @@ class Prompt(QueryFactory):
 
         return content
 
-    def compare_versions(self, seq_a: int, seq_b: int) -> VersionLineDiff:
-        raw_a = self._get_raw_content(seq_a)
-        raw_b = self._get_raw_content(seq_b)
-
-        label_a = f"seq-{seq_a}"
-        label_b = f"seq-{seq_b}"
-
-        hunks = list(
-            difflib.unified_diff(
-                raw_a.splitlines(keepends=True),
-                raw_b.splitlines(keepends=True),
-                fromfile=label_a,
-                tofile=label_b,
-            )
-        )
-
-        return VersionLineDiff(name_a=label_a, name_b=label_b, hunks=hunks)
-
-    def compare_versions_chars(self, seq_a: int, seq_b: int) -> VersionDiff:
-        raw_a = self._get_raw_content(seq_a)
-        raw_b = self._get_raw_content(seq_b)
-
-        label_a = f"seq-{seq_a}"
-        label_b = f"seq-{seq_b}"
-
-        sm = difflib.SequenceMatcher(None, raw_a, raw_b)
-        chunks = [
-            DiffChunk(
-                tag=tag,
-                old_start=i1,
-                old_end=i2,
-                new_start=j1,
-                new_end=j2,
-                old_text=raw_a[i1:i2],
-                new_text=raw_b[j1:j2],
-            )
-            for tag, i1, i2, j1, j2 in sm.get_opcodes()
-        ]
-
-        return VersionDiff(name_a=label_a, name_b=label_b, chunks=chunks)
-
     def compare_versions_structured(self, seq_a: int, seq_b: int) -> StructuredDiff:
-        """Структурное сравнение двух версий на уровне сообщений (ВИ-7).
-
-        Возвращает StructuredDiff с:
-          - added   — сообщения, присутствующие только в seq_b
-          - deleted — сообщения, присутствующие только в seq_a
-          - changed — сообщения с изменённым content (при совпадении роли по позиции)
-        """
         if seq_a == seq_b:
             warnings.warn(
                 f"Сравниваемые версии идентичны: seq_a == seq_b == {seq_a}",

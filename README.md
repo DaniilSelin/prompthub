@@ -1,6 +1,6 @@
 # PromptHub
 
-**Prompt version control system built on SQLite.** Store, version, diff, and roll back LLM prompts — no external services required.
+**Prompt version control system built on SQLite.** Store, version, diff, and roll back LLM prompts - no external services required.
 
 ```python
 from prompthub import Storage
@@ -13,7 +13,7 @@ prompt.add_version([("system", "You are helpful."), ("user", "Hello")])
 ## Installation
 
 ```bash
-pip install prompthub                    # core only — zero dependencies
+pip install prompthub                    # core only - zero dependencies
 pip install prompthub[langchain]         # + LangChain adapter
 pip install prompthub[openai]            # + OpenAI tokenizer
 pip install prompthub[anthropic]         # + Anthropic tokenizer
@@ -23,13 +23,13 @@ pip install prompthub[all]              # everything
 
 ## Features
 
-- **Version control** — every `add_version()` stores a compact diff (Insert/Delete/Replace operations); full snapshots every N versions
-- **Rollback** — soft rollback (new version with old content) or hard rollback (delete history)
-- **Diff** — line diff, char diff, structured message diff between any two versions
-- **Tags** — label prompts with custom `PromptTag` values; filter with a boolean DSL
-- **Token counting & cost estimation** — attach model tags, count tokens, compute cost per 1M tokens from OpenRouter tariffs
-- **LangChain adapter** — wrap any `Prompt` in `LangChainPromptAdapter` to work with `ChatPromptTemplate`
-- **Zero dependencies** — SQLite only; LLM integrations are optional extras
+- **Version control** - every `add_version()` stores a compact diff (Insert/Delete/Replace operations); full snapshots every N versions
+- **Rollback** - soft rollback (new version with old content) or hard rollback (delete history)
+- **Diff** - line diff, char diff, structured message diff between any two versions
+- **Tags** - label prompts with custom `PromptTag` values; filter with a boolean DSL
+- **Token counting & cost estimation** - attach model tags, count tokens, compute cost per 1M tokens from OpenRouter tariffs
+- **LangChain adapter** - wrap any `Prompt` in `LangChainPromptAdapter` to work with `ChatPromptTemplate`
+- **Zero dependencies** - SQLite only; LLM integrations are optional extras
 
 ## Quick Start
 
@@ -73,9 +73,9 @@ prompthub/
 ├── adapters/                # High-level adapters (user-facing)
 │   └── langchain.py         # LangChainPromptAdapter
 ├── facade/
-│   ├── storage.py           # Storage — main entry point
-│   ├── prompt.py            # Prompt — versions, tags, diff, rollback
-│   └── prompt_group.py      # PromptGroup — bulk queries
+│   ├── storage.py           # Storage - main entry point
+│   ├── prompt.py            # Prompt - versions, tags, diff, rollback
+│   └── prompt_group.py      # PromptGroup - bulk queries
 ├── core/
 │   ├── domain/              # Domain models: operations, diff, tags, tariffs
 │   ├── adapters/            # LLM serializers: LangChainAdapter + registry

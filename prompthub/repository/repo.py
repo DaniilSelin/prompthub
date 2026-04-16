@@ -417,7 +417,7 @@ class PromptRepo:
         return {cast(str, r["name"]) for r in cur.fetchall()}
 
     def fetch_current_prompt_tags(self, prompt_id: int) -> set[str]:
-        """Возвращает множество имён категорийных тегов, привязанных к промпту."""
+        """Возвращает множество имен категорийных тегов, привязанных к промпту."""
         cur = self.conn.cursor()
         cur.execute(
             f"""
@@ -441,7 +441,7 @@ class PromptRepo:
     def create_prompt_model_tag_links(
         self, prompt_id: int, tags: list[ModelTagRow], commit: bool = True
     ) -> None:
-        """tags — список словарей {"name": ..., "provider": ...}"""
+        """tags - список словарей {"name": ..., "provider": ...}"""
         for tag in tags:
             self.add_tag(
                 prompt_id,

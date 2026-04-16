@@ -25,7 +25,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-# Core has zero external dependencies — only stdlib (sqlite3).
+# Core has zero external dependencies - only stdlib (sqlite3).
 dependencies = []
 
 [project.optional-dependencies]
@@ -36,7 +36,7 @@ anthropic   = ["anthropic>=0.25"]
 huggingface = ["transformers>=4.30"]
 
 # Convenience aliases
-core = []  # explicit alias for "bare install" — stdlib only, no LLM dependencies
+core = []  # explicit alias for "bare install" - stdlib only, no LLM dependencies
 all  = [
     "langchain-core>=0.1",
     "openai>=1.0",

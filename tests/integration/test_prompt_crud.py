@@ -6,7 +6,7 @@ from prompthub.facade.storage import Storage
 
 
 def _msg(*texts, role="user"):
-    """Вспомогательная функция: создаёт список сообщений из текстов."""
+    """Вспомогательная функция: создает список сообщений из текстов."""
     return [(role, t) for t in texts]
 
 

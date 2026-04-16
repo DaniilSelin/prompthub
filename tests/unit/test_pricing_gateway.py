@@ -1,7 +1,8 @@
 """
-Юнит-тесты для PricingAPIGateway — парсинг цен OpenRouter.
-Покрывает: конвертацию per-token → per-1M, извлечение провайдера, обработку ошибок.
+Юнит-тесты для PricingAPIGateway - парсинг цен OpenRouter.
+Покрывает: конвертацию per-token -> per-1M, извлечение провайдера, обработку ошибок.
 """
+
 import json
 import urllib.error
 from unittest.mock import MagicMock, patch
@@ -20,13 +21,17 @@ def gateway():
 # _parse: конвертация цен
 # ---------------------------------------------------------------------------
 
+
 class TestParse:
 
     def _data(self, *models):
         return {"data": list(models)}
 
     def _model(self, id_, prompt, completion):
-        return {"id": id_, "pricing": {"prompt": str(prompt), "completion": str(completion)}}
+        return {
+            "id": id_,
+            "pricing": {"prompt": str(prompt), "completion": str(completion)},
+        }
 
     def test_converts_per_token_to_per_1m_input(self, gateway):
         data = self._data(self._model("openai/gpt-4o", "0.0000025", "0.00001"))
@@ -62,7 +67,9 @@ class TestParse:
         assert len(result) == 2
 
     def test_handles_zero_pricing(self, gateway):
-        data = self._data({"id": "some/free-model", "pricing": {"prompt": "0", "completion": "0"}})
+        data = self._data(
+            {"id": "some/free-model", "pricing": {"prompt": "0", "completion": "0"}}
+        )
         result = gateway._parse(data)
         assert len(result) == 1
         assert result[0].input_price_per_1m == 0.0
@@ -96,10 +103,13 @@ class TestParse:
 # fetch_pricing_data: сетевой слой
 # ---------------------------------------------------------------------------
 
+
 class TestFetchPricingData:
 
     def test_raises_connection_error_on_network_failure(self, gateway):
-        with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("timeout")):
+        with patch(
+            "urllib.request.urlopen", side_effect=urllib.error.URLError("timeout")
+        ):
             with pytest.raises(ConnectionError, match="недоступен"):
                 gateway.fetch_pricing_data()
 
@@ -114,12 +124,20 @@ class TestFetchPricingData:
                 gateway.fetch_pricing_data()
 
     def test_parses_real_response_format(self, gateway):
-        payload = json.dumps({
-            "data": [
-                {"id": "openai/gpt-4o", "pricing": {"prompt": "0.0000025", "completion": "0.00001"}},
-                {"id": "anthropic/claude-3-5-sonnet", "pricing": {"prompt": "0.000003", "completion": "0.000015"}},
-            ]
-        }).encode()
+        payload = json.dumps(
+            {
+                "data": [
+                    {
+                        "id": "openai/gpt-4o",
+                        "pricing": {"prompt": "0.0000025", "completion": "0.00001"},
+                    },
+                    {
+                        "id": "anthropic/claude-3-5-sonnet",
+                        "pricing": {"prompt": "0.000003", "completion": "0.000015"},
+                    },
+                ]
+            }
+        ).encode()
 
         mock_response = MagicMock()
         mock_response.__enter__ = lambda s: s

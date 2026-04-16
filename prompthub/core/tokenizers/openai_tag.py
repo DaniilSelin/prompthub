@@ -6,13 +6,13 @@ from prompthub.core.tokenizers.base import Messages, ModelTag
 
 
 class OpenAIModelTag(ModelTag):
-    """Подсчёт токенов для моделей OpenAI через официальный SDK-клиент.
+    """Подсчет токенов для моделей OpenAI через официальный SDK-клиент.
 
-    Использует client.beta.chat.completions.count_tokens() — канонический
+    Использует client.beta.chat.completions.count_tokens() - канонический
     способ, рекомендованный OpenAI, учитывающий overhead формата сообщений.
 
     Требует установленного пакета `openai` и переменной окружения OPENAI_API_KEY.
-    При отсутствии любого из них _get_token_count вернёт -1 и выдаст предупреждение.
+    При отсутствии любого из них _get_token_count вернет -1 и выдаст предупреждение.
     """
 
     provider_key = "openai"
@@ -48,11 +48,6 @@ class OpenAIModelTag(ModelTag):
         )
 
     def _get_token_count(self, messages: Messages) -> int:
-        """Считает токены через OpenAI SDK (beta.chat.completions.count_tokens).
-
-        При отсутствии пакета `openai`, OPENAI_API_KEY или другой ошибке
-        выдаёт предупреждение и возвращает -1.
-        """
         try:
             client = self._get_client()
             response = client.beta.chat.completions.count_tokens(
@@ -65,6 +60,6 @@ class OpenAIModelTag(ModelTag):
         except Exception as e:
             warnings.warn(
                 f"[{self.__class__.__name__}:{self.model_name}] "
-                f"ошибка подсчёта токенов: {e}"
+                f"ошибка подсчета токенов: {e}"
             )
             return -1
