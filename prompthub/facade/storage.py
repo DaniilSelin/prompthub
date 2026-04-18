@@ -149,12 +149,6 @@ class Storage(QueryFactory):
     def make_group_prompt(self) -> PromptGroup:
         return PromptGroup(self.repo)
 
-    def find_prompt(self, name: str) -> PromptMetadata | None:
-        row = self.repo.get_prompt_by_name(name)
-        if not row:
-            return None
-        return self.repo.fetch_metadata(row["id"])
-
     def search_by_tags(self, filters: Condition) -> list[PromptMetadata]:
         rows = self.repo.execute_tag_filter_query(filters)
         return [self.repo.fetch_metadata(r["id"]) for r in rows]
