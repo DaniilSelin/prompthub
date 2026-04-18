@@ -1,7 +1,9 @@
 import pytest
 
+import prompthub.core.tokenizers.registry as reg
 from prompthub.core.domain.diff import StructuredDiff
 from prompthub.core.domain.model_tariff import ModelTariff
+from prompthub.core.tokenizers.base import ModelTag
 from prompthub.core.tokenizers.openai_tag import OpenAIModelTag
 from prompthub.infrastructure.tariff_manager import TariffManager
 
@@ -19,7 +21,17 @@ def test_uc05_001_list_all_prompts_with_metadata(storage):
 
 
 @pytest.mark.contract
-def test_uc05_002_list_prompts_includes_per_model_token_count_and_cost(storage):
+def test_uc05_002_list_prompts_includes_per_model_token_count_and_cost(
+    storage, monkeypatch
+):
+    class _FixedTokenOpenAITag(ModelTag):
+        provider_key = "openai"
+
+        def _count_text(self, text: str) -> int:
+            return 8
+
+    monkeypatch.setitem(reg._PROVIDER_REGISTRY, "openai", _FixedTokenOpenAITag)
+
     TariffManager(storage._conn).bulk_upsert(
         [
             ModelTariff(
@@ -96,4 +108,30 @@ def test_uc07_001_changeset_storage_integrity(storage):
 
 @pytest.mark.contract
 def test_uc07_002_compare_versions_returns_structured_diff(storage):
-    pass
+    prompt = storage.create_prompt("structured_contract")
+    prompt.add_version([("user", "hello")])
+    prompt.add_version([("user", "hello world")])
+
+    diff = prompt.compare_versions_structured(1, 2)
+
+    assert isinstance(diff, StructuredDiff)
+    assert diff.name_a == "seq-1"
+    assert diff.name_b == "seq-2"
+    assert diff.has_changes
+    assert diff.changed
+
+
+@pytest.mark.contract
+def test_uc06_003_list_versions_exposes_expected_fields(storage):
+    prompt = storage.create_prompt("history_fields")
+    prompt.add_version([("user", "v1")], description="first")
+
+    history = prompt.list_versions()
+
+    assert len(history) == 1
+    version = history[0]
+    assert version.seq == 1
+    assert version.name == "seq-1"
+    assert version.message == "first"
+    assert version.created_at is not None
+    assert version.is_snapshot is True

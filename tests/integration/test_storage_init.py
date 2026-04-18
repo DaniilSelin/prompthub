@@ -93,5 +93,14 @@ def test_uc01_003_raises_error_when_db_path_is_unavailable(monkeypatch, tmp_path
 
     monkeypatch.setattr("prompthub.facade.storage.sqlite3.connect", failing_connect)
 
-    with pytest.raises(sqlite3.OperationalError, match="unable to open database file"):
+    with pytest.raises(RuntimeError, match="unable to open database file"):
+        Storage(str(db_path))
+
+
+@pytest.mark.integration
+def test_uc01_004_raises_error_for_invalid_existing_sqlite_file(tmp_path):
+    db_path = tmp_path / "invalid.sqlite3"
+    db_path.write_text("not a sqlite database", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="не является валидной базой SQLite"):
         Storage(str(db_path))

@@ -188,7 +188,7 @@ def test_missing_tariff_gives_none_cost_but_has_token_count(storage):
 
 
 # ---------------------------------------------------------------------------
-# TC-COST-04: отсутствие токенизатора -> word-count fallback + предупреждение
+# TC-COST-04: отсутствие токенизатора -> token_count=0 + предупреждение
 # ---------------------------------------------------------------------------
 
 
@@ -216,10 +216,9 @@ def test_missing_tokenizer_falls_back_to_word_count(storage):
         data = storage.list_prompts()
 
     model_info = data[0]["costs"]["unknown-model"]
-    # "hello world" (2) + "be helpful" (2) = 4 слова
-    assert model_info["token_count"] == 4
+    assert model_info["token_count"] == 0
     assert model_info["cost"] is not None
-    assert any("unknown-model" in str(x.message) for x in w)
+    assert any("unknown-provider" in str(x.message) for x in w)
 
 
 # ---------------------------------------------------------------------------

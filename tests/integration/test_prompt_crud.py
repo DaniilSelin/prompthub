@@ -152,3 +152,25 @@ def test_uc03_003_stores_snapshot_every_snapshot_interval(tmp_path):
         assert json.loads(rows[4]["snapshot_content"]) == [["user", "content v5"]]
     finally:
         storage._conn.close()
+
+
+@pytest.mark.integration
+def test_uc02_005_create_prompt_rejects_invalid_messages_and_rolls_back(tmp_path):
+    db_path = tmp_path / "uc02_invalid_messages.sqlite3"
+
+    storage = Storage(str(db_path))
+    try:
+        with pytest.raises(ValueError, match="content должен быть непустым списком"):
+            storage.create_prompt("bad_empty", messages=[])
+        assert storage.repo.get_prompt_by_name("bad_empty") is None
+
+        with pytest.raises(
+            ValueError,
+            match="Каждое сообщение должно быть кортежем",
+        ):
+            storage.create_prompt(
+                "bad_shape", messages=[("user", "ok"), ("assistant", 1)]
+            )
+        assert storage.repo.get_prompt_by_name("bad_shape") is None
+    finally:
+        storage._conn.close()

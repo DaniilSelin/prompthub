@@ -51,6 +51,56 @@ def test_uc08_003_rollback_with_invalid_steps_back_raises_value_error(tmp_path):
 
 
 @pytest.mark.integration
+def test_uc08_004_rollback_with_unknown_target_seq_raises_value_error(tmp_path):
+    db_path = tmp_path / "uc08_unknown_target.sqlite3"
+
+    storage = Storage(str(db_path))
+    try:
+        prompt = _create_prompt_with_versions(
+            storage,
+            prompt_name="unknown_target_prompt",
+            contents=["first", "second", "third"],
+        )
+
+        with pytest.raises(ValueError, match="не найдена"):
+            prompt.rollback(target_seq=999)
+    finally:
+        storage._conn.close()
+
+
+@pytest.mark.integration
+def test_uc08_005_rollback_without_params_raises_value_error(tmp_path):
+    db_path = tmp_path / "uc08_no_params.sqlite3"
+
+    storage = Storage(str(db_path))
+    try:
+        prompt = _create_prompt_with_versions(
+            storage,
+            prompt_name="rollback_no_params_prompt",
+            contents=["first", "second"],
+        )
+
+        with pytest.raises(ValueError, match="Нужно указать target_seq или steps_back"):
+            prompt.rollback()
+    finally:
+        storage._conn.close()
+
+
+@pytest.mark.integration
+def test_uc08_006_rollback_without_versions_raises_value_error(tmp_path):
+    db_path = tmp_path / "uc08_no_versions.sqlite3"
+
+    storage = Storage(str(db_path))
+    try:
+        prompt = storage.create_prompt("empty_prompt")
+
+        with pytest.raises(ValueError, match="Нет версий для отката"):
+            prompt.rollback(target_seq=1)
+    finally:
+        storage._conn.close()
+
+
+@pytest.mark.integration
 def test_uc16_001_returns_latest_version_content(tmp_path):
     db_path = tmp_path / "uc16_latest.sqlite3"
 
